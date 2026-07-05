@@ -1,0 +1,179 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Administrador {
+  id           String   @id @default(uuid())
+  nome         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(150)
+  senha        String   @db.VarChar(255)
+  ativo        Boolean  @default(true) @map("ativo")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("administradores")
+}
+
+model Profissional {
+  id            String      @id @default(uuid())
+  nome          String      @db.VarChar(120)
+  especialidade String      @db.VarChar(100)
+  email         String      @unique @db.VarChar(150)
+  telefone      String      @db.VarChar(20)
+  senha         String      @db.VarChar(255)
+  ativo         Boolean     @default(true) @map("ativo")
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+  pacientes     Paciente[]
+  protocolos    Protocolo[]
+
+  @@map("profissionais")
+}
+
+model Paciente {
+  id             String       @id @default(uuid())
+  profissionalId String       @map("profissional_id")
+  nome           String       @db.VarChar(120)
+  dataNascimento DateTime     @db.Date @map("data_nascimento")
+  telefone       String       @db.VarChar(20)
+  email          String?      @db.VarChar(150)
+  observacoes    String?      @db.Text @map("observacoes")
+  ativo          Boolean      @default(true) @map("ativo")
+  criadoEm       DateTime     @default(now()) @map("criado_em")
+  atualizadoEm   DateTime     @updatedAt @map("atualizado_em")
+  
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Restrict)
+  tratamentos    Tratamento[]
+
+  @@map("pacientes")
+}
+
+model Protocolo {
+  id             String            @id @default(uuid())
+  profissionalId String            @map("profissional_id")
+  nome           String            @db.VarChar(150)
+  descricao      String?           @db.Text
+  diasPadrao     Int               @map("dias_padrao")
+  ativo          Boolean           @default(true) @map("ativo")
+  criadoEm       DateTime          @default(now()) @map("criado_em")
+  atualizadoEm   DateTime          @updatedAt @map("atualizado_em")
+  
+  profissional   Profissional      @relation(fields: [profissionalId], references: [id], onDelete: Restrict)
+  versoes        VersaoProtocolo[]
+
+  @@map("protocolos")
+}
+
+model VersaoProtocolo {
+  id          String         @id @default(uuid())
+  protocoloId String         @map("protocolo_id")
+  versao      Int
+  totalDias   Int            @map("total_dias")
+  criadoEm    DateTime       @default(now()) @map("criado_em")
+  
+  protocolo   Protocolo      @relation(fields: [protocoloId], references: [id], onDelete: Restrict)
+  dias        DiaProtocolo[]
+  tratamentos Tratamento[]
+
+  @@map("versoes_protocolo")
+}
+
+model DiaProtocolo {
+  id                String               @id @default(uuid())
+  versaoProtocoloId String               @map("versao_protocolo_id")
+  numeroDia         Int                  @map("numero_dia")
+  titulo            String?              @db.VarChar(150)
+  criadoEm          DateTime             @default(now()) @map("criado_em")
+  
+  versao            VersaoProtocolo      @relation(fields: [versaoProtocoloId], references: [id], onDelete: Restrict)
+  tarefas           TarefaDiaProtocolo[]
+
+  @@map("dias_protocolo")
+}
+
+model TarefaDiaProtocolo {
+  id             String                  @id @default(uuid())
+  diaProtocoloId String                  @map("dia_protocolo_id")
+  descricao      String                  @db.Text
+  numeroOrdem    Int                     @map("numero_ordem")
+  criadoEm       DateTime                @default(now()) @map("criado_em")
+  
+  dia            DiaProtocolo            @relation(fields: [diaProtocoloId], references: [id], onDelete: Restrict)
+  respostas      RespostaTarefaCheckin[]
+
+  @@map("tarefas_dia_protocolo")
+}
+
+enum StatusTratamento {
+  ativo
+  finalizado
+  cancelado
+}
+
+model Tratamento {
+  id                String           @id @default(uuid())
+  pacienteId        String           @map("paciente_id")
+  versaoProtocoloId String           @map("versao_protocolo_id")
+  nomeProcedimento  String           @db.VarChar(150) @map("nome_procedimento")
+  dataProcedimento  DateTime         @db.Date @map("data_procedimento")
+  status            StatusTratamento @default(ativo)
+  tokenPaciente     String           @unique @db.Char(64) @map("token_paciente")
+  tokenExpiraEm     DateTime?        @map("token_expira_em")
+  criadoEm          DateTime         @default(now()) @map("criado_em")
+  atualizadoEm      DateTime         @updatedAt @map("atualizado_em")
+  
+  paciente          Paciente         @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  versaoProtocolo   VersaoProtocolo  @relation(fields: [versaoProtocoloId], references: [id], onDelete: Restrict)
+  checkins          Checkin[]
+  sessoes           SessaoPaciente[]
+
+  @@map("tratamentos")
+}
+
+model Checkin {
+  id             String                  @id @default(uuid())
+  tratamentoId   String                  @map("tratamento_id")
+  diaRecuperacao Int                     @map("dia_recuperacao")
+  nivelDor       Int                     @db.TinyInt @map("nivel_dor")
+  observacoes    String?                 @db.Text
+  enviadoEm      DateTime                @map("enviado_em")
+  criadoEm       DateTime                @default(now()) @map("criado_em")
+  
+  tratamento     Tratamento              @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
+  respostas      RespostaTarefaCheckin[]
+
+  @@unique([tratamentoId, diaRecuperacao])
+  @@map("checkins")
+}
+
+model RespostaTarefaCheckin {
+  id                   String             @id @default(uuid())
+  checkinId            String             @map("checkin_id")
+  tarefaDiaProtocoloId String             @map("tarefa_dia_protocolo_id")
+  concluido            Boolean
+  concluidoEm          DateTime?          @map("concluido_em")
+  
+  checkin              Checkin            @relation(fields: [checkinId], references: [id], onDelete: Restrict)
+  tarefa               TarefaDiaProtocolo @relation(fields: [tarefaDiaProtocoloId], references: [id], onDelete: Restrict)
+
+  @@map("respostas_tarefa_checkin")
+}
+
+model SessaoPaciente {
+  id           String    @id @default(uuid())
+  tratamentoId String    @map("tratamento_id")
+  tokenSessao  String    @unique @db.Char(64) @map("token_sessao")
+  userAgent    String?   @db.VarChar(255) @map("user_agent")
+  expiraEm     DateTime  @map("expira_em")
+  ultimoAcesso DateTime? @map("ultimo_acesso")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  
+  tratamento   Tratamento @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
+
+  @@map("sessoes_paciente")
+}
