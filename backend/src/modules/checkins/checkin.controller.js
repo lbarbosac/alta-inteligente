@@ -1,16 +1,13 @@
+// Arquivo: backend/src/modules/checkins/checkin.controller.js
 const service = require('./checkin.service');
 const { ApiResponse } = require('../../shared/utils/ApiResponse');
 
-/**
- * POST /api/v1/checkins
- *
- * Recebe e persiste o check-in diário do paciente.
- * Rota pública — o paciente não possui JWT.
- * A segurança é garantida pelo tratamentoId (UUID) + constraint @@unique do banco.
- */
 async function create(req, res) {
-  const checkin = await service.submitCheckin(req.body);
-  return ApiResponse.created(res, checkin, 'Check-in enviado com sucesso! Continue assim.');
+  return ApiResponse.created(res, await service.submitCheckin(req.body), 'Check-in enviado com sucesso!');
 }
 
-module.exports = { create };
+async function listByTreatment(req, res) {
+  return ApiResponse.success(res, await service.getCheckinsByTreatment(req.params.tratamentoId, req.usuario.id), 'Histórico carregado.');
+}
+
+module.exports = { create, listByTreatment };

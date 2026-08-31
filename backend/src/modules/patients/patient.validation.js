@@ -13,7 +13,9 @@ const createSchema = z.object({
     .min(2, 'Nome deve ter ao menos 2 caracteres.'),
 
   dataNascimento: z.coerce
-    .date({ message: 'Data de nascimento inválida. Use o formato AAAA-MM-DD.' }),
+    .date({ message: 'Data de nascimento inválida. Use o formato AAAA-MM-DD.' })
+    .max(new Date(), { message: 'Data de nascimento não pode ser no futuro.' })
+    .refine(d => d.getFullYear() >= 1900, { message: 'Ano de nascimento inválido (mínimo: 1900).' }),
 
   telefone: z
     .string()
@@ -39,6 +41,8 @@ const updateSchema = z.object({
 
   dataNascimento: z.coerce
     .date({ message: 'Data de nascimento inválida. Use o formato AAAA-MM-DD.' })
+    .max(new Date(), { message: 'Data de nascimento não pode ser no futuro.' })
+    .refine(d => d.getFullYear() >= 1900, { message: 'Ano de nascimento inválido (mínimo: 1900).' })
     .optional(),
 
   telefone: z
