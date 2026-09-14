@@ -27,16 +27,15 @@ async function update(id,data) { return prisma.protocolo.update({ where:{id},dat
 async function archive(id) { return prisma.protocolo.update({ where:{id},data:{ativo:false},include:INCLUDE_COMPLETO }); }
 async function unarchive(id) { return prisma.protocolo.update({ where:{id},data:{ativo:true},include:INCLUDE_COMPLETO }); }
 
-async function updateVersionDays(versaoId, diasPadrao, dias) {
-  return prisma.$transaction(async (tx) => {
-    await tx.versaoProtocolo.update({ where:{id:versaoId},data:{totalDias:diasPadrao} });
-    await tx.diaProtocolo.deleteMany({ where:{versaoProtocoloId:versaoId} });
-    for (const dia of dias) {
-      await tx.diaProtocolo.create({ data:{ versaoProtocoloId:versaoId,numeroDia:dia.numeroDia,titulo:dia.titulo||null,
-        tarefas:{ create:(dia.tarefas??[]).filter(t=>t.descricao?.trim()).map((t,i)=>({descricao:t.descricao.trim(),numeroOrdem:i+1})) }
-      }});
+// Create aninhado: o Prisma grava versão, dias e tarefas numa transação só.
+async function createVersion(protocoloId, versao, totalDias, dias) {
+  return prisma.versaoProtocolo.create({
+    data:{ protocoloId,versao,totalDias,
+      dias:{ create:dias.map(d=>({ numeroDia:d.numeroDia,titulo:d.titulo||null,
+        tarefas:{ create:(d.tarefas??[]).filter(t=>t.descricao?.trim()).map((t,i)=>({descricao:t.descricao.trim(),numeroOrdem:i+1})) }
+      })) }
     }
   });
 }
 
-module.exports = { create,findAllByProfessional,findById,update,archive,unarchive,updateVersionDays };
+module.exports = { create,findAllByProfessional,findById,update,archive,unarchive,createVersion };

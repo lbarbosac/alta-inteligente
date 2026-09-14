@@ -64,7 +64,7 @@ const createSchema = z.object({
 /**
  * updateSchema: apenas metadados do protocolo.
  * Alterações estruturais (dias/tarefas) geram nova versão — tratado
- * em rotas específicas quando o módulo de versionamento for implementado.
+ * em PUT /:id/editar (validateEditar).
  */
 const updateSchema = z.object({
   nome: z
@@ -100,4 +100,15 @@ function validateUpdate(req, res, next) {
   next();
 }
 
-module.exports = { validateCreate, validateUpdate };
+/**
+ * PUT /:id/editar recebe o protocolo inteiro (metadados + dias + tarefas),
+ * o mesmo formato da criação.
+ */
+function validateEditar(req, res, next) {
+  const resultado = createSchema.safeParse(req.body);
+  if (!resultado.success) return next(resultado.error);
+  req.body = resultado.data;
+  next();
+}
+
+module.exports = { validateCreate, validateUpdate, validateEditar };

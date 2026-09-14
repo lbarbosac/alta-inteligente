@@ -25,11 +25,19 @@ async function unarchiveProtocol(id, profissionalId) {
   if (p.ativo) throw new ValidationError('Protocolo já está ativo.');
   return repository.unarchive(id);
 }
+// Compara só o que o paciente vê: número do dia, título e tarefas, na ordem.
+const estrutura = dias => JSON.stringify([...dias].sort((a,b)=>a.numeroDia-b.numeroDia)
+  .map(d => [d.numeroDia, d.titulo||null, (d.tarefas??[]).map(t=>t.descricao?.trim()).filter(Boolean)]));
+
+// Tratamentos apontam para uma versão e as respostas de check-in apontam para as tarefas dela,
+// então dias e tarefas não podem ser apagados. Mudou a estrutura → cria versão nova:
+// tratamentos em andamento continuam na versão deles, tratamentos novos já pegam a nova.
 async function editarProtocolo(id, { nome,descricao,diasPadrao,dias }, profissionalId) {
   const protocolo = await assert(id,profissionalId);
-  await repository.update(id,{ nome,descricao,diasPadrao:parseInt(diasPadrao) });
-  const versao = protocolo.versoes[0];
-  if (versao) await repository.updateVersionDays(versao.id, parseInt(diasPadrao), dias??[]);
+  const versaoAtual = protocolo.versoes[0];
+  const mudouEstrutura = !versaoAtual || versaoAtual.totalDias !== diasPadrao || estrutura(versaoAtual.dias) !== estrutura(dias);
+  if (mudouEstrutura) await repository.createVersion(id, (versaoAtual?.versao ?? 0) + 1, diasPadrao, dias);
+  await repository.update(id,{ nome,descricao,diasPadrao });
   return repository.findById(id);
 }
 
