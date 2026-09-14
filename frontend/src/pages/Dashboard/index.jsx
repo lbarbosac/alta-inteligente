@@ -1,121 +1,198 @@
 // Arquivo: frontend/src/pages/Dashboard/index.jsx
-import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, CheckCircle2, Clock, ChevronRight, TrendingUp, RefreshCw } from 'lucide-react';
-import StatCard            from '../../components/StatCard';
+import { Link } from 'react-router-dom';
+import { Phone, RefreshCw, CheckCircle2 } from 'lucide-react';
+import PageHeader from '../../components/PageHeader';
+import Card from '../../components/Card';
+import StatCard from '../../components/StatCard';
+import PainLevel from '../../components/PainLevel';
 import RecoveryStatusBadge from '../../components/RecoveryStatusBadge';
-import { useDashboard }    from '../../hooks/useDashboard';
+import Avatar from '../../components/Avatar';
+import Button from '../../components/Button';
+import InlineAlert from '../../components/InlineAlert';
+import { useDashboard } from '../../hooks/useDashboard';
+import { useAuth } from '../../contexts/AuthContext';
+import { dataPorExtenso, formatarRelativo, nomeCurto, saudacao } from '../../utils/formatDate';
 
-function formatarRelativo(d) {
-  if (!d) return '—';
-  const min = Math.floor((Date.now()-new Date(d).getTime())/60000);
-  if (min<1) return 'Agora mesmo';
-  if (min<60) return `${min} min atrás`;
-  const hrs = Math.floor(min/60);
-  if (hrs<24) return `${hrs}h atrás`;
-  return `${Math.floor(hrs/24)}d atrás`;
-}
-
-function Skeleton({ rows=3 }) {
+function ListaSkeleton({ linhas = 3 }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-50"><div className="h-4 w-36 skeleton"/></div>
-      {Array.from({length:rows}).map((_,i)=>(
-        <div key={i} className="flex items-center gap-4 px-6 py-4 border-b border-slate-50 animate-pulse">
-          <div className="w-9 h-9 rounded-full skeleton flex-shrink-0"/><div className="flex-1 space-y-2"><div className="h-3.5 w-40 skeleton"/><div className="h-3 w-28 skeleton"/></div><div className="h-4 w-10 skeleton"/>
+    <div aria-busy="true" className="divide-y divide-line">
+      {Array.from({ length: linhas }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 px-5 py-4">
+          <div className="skeleton h-10 w-10" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton h-4 w-40" />
+            <div className="skeleton h-3 w-28" />
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function AlertasCriticos({ alertas }) {
-  const navigate = useNavigate();
-  if (!alertas.length) return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-50"><AlertTriangle size={16} strokeWidth={1.5} className="text-slate-300"/><h2 className="text-slate-950 text-sm font-semibold">Alertas Críticos</h2></div>
-      <div className="flex flex-col items-center justify-center py-12 gap-2"><CheckCircle2 size={28} strokeWidth={1.5} className="text-emerald-400"/><p className="text-slate-500 text-sm font-medium">Nenhum alerta no momento.</p></div>
-    </div>
-  );
+// ─── Quem precisa de atenção — primeiro na leitura ─────────────────────────
+function PrecisamDeAtencao({ alertas, loading }) {
   return (
-    <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-50">
-        <AlertTriangle size={16} strokeWidth={1.5} className="text-red-500"/><h2 className="text-slate-950 text-sm font-semibold">Alertas Críticos</h2>
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">{alertas.length}</span>
+    <Card
+      padded={false}
+      title="Precisam de atenção"
+      description="Dor 7 ou mais nas últimas 48 horas"
+      actions={alertas.length > 0 && (
+        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-red-600 px-2 text-sm font-semibold text-white tabular-nums">
+          {alertas.length}<span className="sr-only"> pacientes</span>
+        </span>
+      )}
+      className="h-full"
+    >
+      {loading ? <ListaSkeleton linhas={3} /> : alertas.length === 0 ? (
+        <div className="flex items-center gap-3 px-5 py-10">
+          <CheckCircle2 size={20} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
+          <p className="text-sm text-neutral-600">Nenhum paciente com dor alta nas últimas 48 horas.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-line">
+          {alertas.map((a) => (
+            <li key={a.checkinId} className="relative flex items-center gap-4 px-5 py-4 transition-colors hover:bg-neutral-50">
+              <PainLevel nivel={a.nivelDor} size="lg" />
+              <div className="min-w-0 flex-1">
+                <Link
+                  to={`/patients/${a.paciente.id}`}
+                  className="font-medium text-ink after:absolute after:inset-0 hover:underline"
+                >
+                  {a.paciente.nome}
+                </Link>
+                <p className="mt-0.5 truncate text-sm text-neutral-600">
+                  {a.tratamento.nomeProcedimento} · Dia {a.diaRecuperacao} · {formatarRelativo(a.enviadoEm)}
+                </p>
+                {a.observacoes && (
+                  <p className="mt-1 line-clamp-1 text-sm text-neutral-500">“{a.observacoes}”</p>
+                )}
+              </div>
+              <div className="hidden flex-shrink-0 sm:block">
+                <RecoveryStatusBadge status={a.statusClinico} size="sm" />
+              </div>
+              {a.paciente.telefone && (
+                <a
+                  href={`tel:${a.paciente.telefone.replace(/\D/g, '')}`}
+                  aria-label={`Ligar para ${a.paciente.nome}`}
+                  title="Ligar"
+                  className="relative z-10 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full
+                    border border-neutral-300 bg-white text-ink transition-colors hover:border-ink"
+                >
+                  <Phone size={16} strokeWidth={1.75} />
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// ─── Resumo — o bloco escuro da tela ───────────────────────────────────────
+function Resumo({ cards, loading }) {
+  return (
+    <section aria-labelledby="titulo-resumo" className="on-dark flex h-full flex-col justify-between rounded-xl bg-ink p-5 text-white sm:p-6">
+      <div>
+        <h2 id="titulo-resumo" className="text-sm font-medium text-neutral-400">Tratamentos em andamento</h2>
+        {loading
+          ? <div className="mt-4 h-14 w-24 animate-pulse rounded-md bg-neutral-800" />
+          : <p className="mt-3 text-6xl font-semibold leading-none tracking-tight tabular-nums">{cards?.totalTratamentosAtivos ?? 0}</p>}
       </div>
-      <ul className="divide-y divide-slate-50">
-        {alertas.map(a=>(
-          <li key={a.checkinId} onClick={()=>navigate(`/patients/${a.paciente.id}`)}
-            className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/60 transition-colors cursor-pointer group">
-            <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-red-700">{a.paciente.nome?.[0]?.toUpperCase()??'?'}</div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2"><p className="text-slate-950 text-sm font-medium truncate">{a.paciente.nome}</p><RecoveryStatusBadge status={a.statusClinico} size="sm"/></div>
-              <p className="text-slate-400 text-xs font-light mt-0.5 truncate">{a.tratamento.nomeProcedimento} · Dia {a.diaRecuperacao}</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-slate-950 text-sm font-bold">{a.nivelDor}<span className="text-slate-400 text-xs font-light">/10</span></p>
-              <p className="text-slate-400 text-[10px] font-light mt-0.5">{formatarRelativo(a.enviadoEm)}</p>
-            </div>
-            <ChevronRight size={14} strokeWidth={1.5} className="text-slate-300 group-hover:text-slate-500 flex-shrink-0"/>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-8 grid grid-cols-3 gap-2">
+        <StatCard tone="escuro" title="Check-ins" value={cards?.checkinsHoje ?? 0} description="hoje" loading={loading} />
+        <StatCard tone="escuro" title="Dor alta" value={cards?.totalAlertas ?? 0} alerta={cards?.totalAlertas > 0} description="últimas 48 h" loading={loading} />
+        <StatCard tone="escuro" title="Sem check-in" value={cards?.semCheckinRecente ?? 0} description="há mais de 48 h" loading={loading} />
+      </div>
     </section>
   );
 }
 
-function CheckinsRecentes({ checkins }) {
-  const navigate = useNavigate();
-  if (!checkins.length) return (
-    <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-50"><TrendingUp size={16} strokeWidth={1.5} className="text-slate-400"/><h2 className="text-slate-950 text-sm font-semibold">Últimos Check-ins</h2></div>
-      <div className="flex flex-col items-center justify-center py-10"><p className="text-slate-400 text-sm font-light">Nenhum check-in recebido ainda.</p></div>
-    </section>
-  );
+// ─── Últimos check-ins ─────────────────────────────────────────────────────
+function UltimosCheckins({ checkins, loading }) {
   return (
-    <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-50"><TrendingUp size={16} strokeWidth={1.5} className="text-slate-400"/><h2 className="text-slate-950 text-sm font-semibold">Últimos Check-ins</h2></div>
-      <ul className="divide-y divide-slate-50">
-        {checkins.map(c=>(
-          <li key={c.checkinId} onClick={()=>navigate(`/patients/${c.paciente.id}`)}
-            className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50/60 transition-colors cursor-pointer">
-            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-slate-600">{c.paciente.nome?.[0]?.toUpperCase()??'?'}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-slate-900 text-sm font-medium truncate">{c.paciente.nome}</p>
-              <p className="text-slate-400 text-xs font-light mt-0.5 truncate">{c.tratamento.nomeProcedimento} · Dia {c.diaRecuperacao}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <RecoveryStatusBadge status={c.statusClinico} size="sm"/>
-              <p className="text-slate-400 text-[10px] font-light">{formatarRelativo(c.enviadoEm)}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <Card padded={false} title="Últimos check-ins">
+      {loading ? <ListaSkeleton linhas={4} /> : checkins.length === 0 ? (
+        <p className="px-5 py-10 text-sm text-neutral-600">Nenhum check-in recebido ainda.</p>
+      ) : (
+        <>
+          <div className="hidden grid-cols-12 gap-4 border-b border-line px-5 py-2.5 text-xs font-medium text-neutral-500 md:grid" aria-hidden="true">
+            <span className="col-span-4">Paciente</span>
+            <span className="col-span-3">Procedimento</span>
+            <span className="col-span-1">Dia</span>
+            <span className="col-span-1">Dor</span>
+            <span className="col-span-2">Status</span>
+            <span className="col-span-1 text-right">Enviado</span>
+          </div>
+          <ul className="divide-y divide-line">
+            {checkins.map((c) => (
+              <li key={c.checkinId} className="relative grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 transition-colors hover:bg-neutral-50 md:grid-cols-12">
+                <div className="flex min-w-0 items-center gap-3 md:col-span-4">
+                  <Avatar nome={c.paciente.nome} size="sm" />
+                  <Link to={`/patients/${c.paciente.id}`} className="hidden truncate text-sm font-medium text-ink after:absolute after:inset-0 hover:underline md:inline">
+                    {c.paciente.nome}
+                  </Link>
+                </div>
+                <div className="min-w-0 md:hidden">
+                  <Link to={`/patients/${c.paciente.id}`} className="block truncate text-sm font-medium text-ink after:absolute after:inset-0">
+                    {c.paciente.nome}
+                  </Link>
+                  <p className="truncate text-sm text-neutral-600">Dia {c.diaRecuperacao} · {formatarRelativo(c.enviadoEm)}</p>
+                </div>
+                <p className="hidden truncate text-sm text-neutral-600 md:col-span-3 md:block">{c.tratamento.nomeProcedimento}</p>
+                <p className="hidden text-sm tabular-nums text-ink md:col-span-1 md:block">{c.diaRecuperacao}</p>
+                <div className="md:col-span-1"><PainLevel nivel={c.nivelDor} size="sm" /></div>
+                <div className="hidden md:col-span-2 md:block"><RecoveryStatusBadge status={c.statusClinico} size="sm" /></div>
+                <p className="hidden text-right text-sm text-neutral-500 md:col-span-1 md:block">{formatarRelativo(c.enviadoEm)}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
   );
 }
 
 export default function Dashboard() {
+  const { usuario } = useAuth();
   const { dados, loading, erro, refetch } = useDashboard();
-  if (erro) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4 max-w-7xl mx-auto">
-      <AlertTriangle size={28} strokeWidth={1.5} className="text-red-400"/>
-      <p className="text-slate-600 text-sm">{erro}</p>
-      <button onClick={refetch} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-950 text-white text-sm hover:bg-slate-800 transition-colors"><RefreshCw size={14} strokeWidth={1.5}/>Tentar novamente</button>
-    </div>
+
+  const cabecalho = (
+    <PageHeader
+      eyebrow={dataPorExtenso()}
+      title={`${saudacao()}, ${nomeCurto(usuario?.nome) || 'bem-vindo'}`}
+      actions={
+        <Button variant="secondary" onClick={refetch} disabled={loading}>
+          <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
+          Atualizar
+        </Button>
+      }
+    />
   );
-  return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div><h1 className="text-slate-950 text-2xl font-extrabold tracking-tight">Dashboard</h1><p className="text-slate-400 text-sm font-light mt-1">Acompanhe a evolução dos seus pacientes em tempo real.</p></div>
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Tratamentos Ativos"  value={loading?null:dados?.cards.totalTratamentosAtivos??0} icon={Activity}      color="slate" description="pacientes em recuperação" loading={loading}/>
-        <StatCard title="Alertas Críticos"    value={loading?null:dados?.cards.totalAlertas??0}           icon={AlertTriangle} color="red"   description="dor ≥ 7 nas últimas 48h"  loading={loading}/>
-        <StatCard title="Check-ins Hoje"      value={loading?null:dados?.cards.checkinsHoje??0}           icon={CheckCircle2}  color="green" description="registros de hoje"         loading={loading}/>
-        <StatCard title="Sem Check-in"        value={loading?null:dados?.cards.semCheckinRecente??0}      icon={Clock}         color="amber" description="há mais de 48 horas"      loading={loading}/>
-      </section>
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <div className="xl:col-span-3">{loading?<Skeleton rows={3}/>:<AlertasCriticos alertas={dados?.alertasCriticos??[]}/>}</div>
-        <div className="xl:col-span-2">{loading?<Skeleton rows={4}/>:<CheckinsRecentes checkins={dados?.checkinsRecentes??[]}/>}</div>
+
+  if (erro) {
+    return (
+      <div className="space-y-8">
+        {cabecalho}
+        <InlineAlert action={<Button size="sm" variant="secondary" onClick={refetch}>Tentar novamente</Button>}>
+          {erro}
+        </InlineAlert>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {cabecalho}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <PrecisamDeAtencao alertas={dados?.alertasCriticos ?? []} loading={loading} />
+        </div>
+        <div className="lg:col-span-5">
+          <Resumo cards={dados?.cards} loading={loading} />
+        </div>
+      </div>
+      <UltimosCheckins checkins={dados?.checkinsRecentes ?? []} loading={loading} />
     </div>
   );
 }
