@@ -1,371 +1,462 @@
 // Arquivo: src/pages/Patients/PatientProfile/index.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { ArrowLeft, Phone, Calendar, Copy, ClipboardList, XCircle, CheckCircle2, Link as LinkIcon, User, Loader2, RefreshCw, AlertCircle, Play, Save, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
+import { ArrowLeft, Check, ChevronDown, Copy, Pencil, Play, RefreshCw, XCircle, ClipboardList } from 'lucide-react';
+import Avatar from '../../../components/Avatar';
+import Button from '../../../components/Button';
+import Card from '../../../components/Card';
+import ConfirmDialog from '../../../components/ConfirmDialog';
+import EmptyState from '../../../components/EmptyState';
+import Field, { inputClass } from '../../../components/Field';
+import InlineAlert from '../../../components/InlineAlert';
+import Modal from '../../../components/Modal';
+import PainLevel from '../../../components/PainLevel';
 import PainScale from '../../../components/PainScale';
 import RecoveryStatusBadge from '../../../components/RecoveryStatusBadge';
-import Modal from '../../../components/Modal';
 import { createTreatment, updateTreatment } from '../../../services/treatmentService';
 import { getProtocols } from '../../../services/protocolService';
 import { usePatientProfile } from '../../../hooks/usePatientProfile';
+import { calculatePatientStatus } from '../../../utils/recoveryStatus';
+import { zonaDor, COR_ZONA } from '../../../utils/painLevelColor';
+import { calcularIdade, formatarDataCivil, formatarDataHora, formatarRelativo } from '../../../utils/formatDate';
 
-const getInitials = n => { const p=n?.trim().split(' ').filter(Boolean)??[]; return !p.length?'?':p.length===1?p[0][0].toUpperCase():(p[0][0]+p[p.length-1][0]).toUpperCase(); };
-const calcularIdade = d => { if(!d)return null; const h=new Date(),n=new Date(d); let i=h.getFullYear()-n.getFullYear(); const m=h.getMonth()-n.getMonth(); if(m<0||(m===0&&h.getDate()<n.getDate()))i--; return i; };
-const fmtData = d => d?new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(d)):'—';
-const fmtHora = d => d?new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(d)):'—';
-const dorColor = n => !n?'#94a3b8':n<=3?'#10b981':n<=6?'#f59e0b':n<=8?'#f97316':'#ef4444';
-const INPUT = `w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-300 outline-none transition-all focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8`;
+// Cor do número de dor sobre o bloco escuro (red-400 7,16:1 e amber-400 11,86:1 sobre ink)
+const COR_DOR_NO_ESCURO = { critico: 'text-red-400', atencao: 'text-amber-400', normal: 'text-white', vazia: 'text-white' };
 
 function Skeleton() {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto animate-pulse">
-      <div className="h-5 w-32 skeleton"/>
-      <div className="bg-white border border-slate-100 rounded-2xl p-6"><div className="flex items-center gap-5"><div className="w-16 h-16 rounded-2xl skeleton flex-shrink-0"/><div className="flex-1 space-y-3"><div className="h-5 w-48 skeleton"/><div className="h-4 w-32 skeleton"/></div></div></div>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="space-y-5">{[1,2,3].map(i=><div key={i} className="h-40 bg-white border border-slate-100 rounded-2xl skeleton"/>)}</div>
-        <div className="xl:col-span-2 space-y-4"><div className="h-60 bg-white border border-slate-100 rounded-2xl skeleton"/><div className="h-48 bg-white border border-slate-100 rounded-2xl skeleton"/></div>
+    <div className="space-y-6" aria-busy="true">
+      <div className="skeleton h-5 w-24" />
+      <div className="flex items-center gap-4">
+        <div className="skeleton h-14 w-14 rounded-full" />
+        <div className="space-y-2"><div className="skeleton h-7 w-56" /><div className="skeleton h-4 w-40" /></div>
+      </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="space-y-5 lg:col-span-8"><div className="skeleton h-80 rounded-xl" /><div className="skeleton h-48 rounded-xl" /></div>
+        <div className="space-y-5 lg:col-span-4"><div className="h-64 animate-pulse rounded-xl bg-neutral-300" /><div className="skeleton h-48 rounded-xl" /></div>
       </div>
     </div>
   );
 }
 
+// ─── Gráfico de evolução da dor ────────────────────────────────────────────
 function TooltipDor({ active, payload }) {
-  if (!active||!payload?.length) return null;
-  const d=payload[0].payload;
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
   return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-float px-4 py-3 text-xs">
-      <p className="font-semibold text-slate-800">Dia {d.dia}</p>
-      <p className="text-slate-500 mt-0.5">{d.data}</p>
-      <p className="font-bold mt-1" style={{color:dorColor(d.dor)}}>Dor: {d.dor}/10</p>
+    <div className="rounded-lg bg-ink px-3 py-2 text-xs text-white">
+      <p className="font-semibold">Dia {d.dia}</p>
+      <p className="text-neutral-400">{d.data}</p>
+      <p className={`mt-1 text-sm font-semibold ${COR_DOR_NO_ESCURO[zonaDor(d.dor)]}`}>Dor {d.dor}/10</p>
     </div>
   );
+}
+
+function PontoDor({ cx, cy, payload }) {
+  if (cx == null || cy == null) return null;
+  return <circle cx={cx} cy={cy} r={4.5} fill={COR_ZONA[zonaDor(payload.dor)].grafico} stroke="#FFFFFF" strokeWidth={2} />;
 }
 
 function GraficoDor({ checkins }) {
-  if (!checkins.length) return null;
-  const data = checkins.map(c=>({dia:c.diaRecuperacao,label:`D${c.diaRecuperacao}`,dor:c.nivelDor,data:fmtHora(c.enviadoEm)}));
+  const data = checkins.map(c => ({ dia: c.diaRecuperacao, label: `D${c.diaRecuperacao}`, dor: c.nivelDor, data: formatarDataHora(c.enviadoEm) }));
+  const resumo = checkins.map(c => `dia ${c.diaRecuperacao}: ${c.nivelDor}`).join(', ');
+
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2"><Activity size={16} strokeWidth={1.5} className="text-slate-400"/><h2 className="text-slate-950 text-sm font-semibold">Evolução da Dor</h2></div>
-        <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
-          {[['bg-emerald-500','1–3'],['bg-amber-500','4–6'],['bg-orange-500','7–8'],['bg-red-500','9–10']].map(([c,l])=>(
-            <span key={l} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${c} inline-block`}/>{l}</span>
-          ))}
-        </div>
+    <figure>
+      <div className="h-64" role="img" aria-label={`Evolução da dor por dia de recuperação — ${resumo}`}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 12, right: 12, left: -12, bottom: 0 }}>
+            <ReferenceArea y1={7} y2={10} fill="#FEF2F2" fillOpacity={1} />
+            <CartesianGrid vertical={false} stroke="#E5E5E5" />
+            <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#737373' }} axisLine={false} tickLine={false} dy={6} />
+            <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 12, fill: '#737373' }} axisLine={false} tickLine={false} width={36} />
+            <Tooltip content={<TooltipDor />} cursor={{ stroke: '#A3A3A3', strokeDasharray: '3 3' }} />
+            <Line type="monotone" dataKey="dor" stroke="#0A0A0A" strokeWidth={2} dot={<PontoDor />} activeDot={{ r: 6, fill: '#0A0A0A', stroke: '#FFFFFF', strokeWidth: 2 }} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{top:8,right:8,left:-20,bottom:0}}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-          <XAxis dataKey="label" tick={{fontSize:11,fill:'#94a3b8'}} axisLine={false} tickLine={false}/>
-          <YAxis domain={[0,10]} tick={{fontSize:11,fill:'#94a3b8'}} axisLine={false} tickLine={false} ticks={[0,2,4,6,8,10]}/>
-          <Tooltip content={<TooltipDor/>}/>
-          <ReferenceLine y={3} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.4}/>
-          <ReferenceLine y={6} stroke="#f59e0b" strokeDasharray="4 4" strokeOpacity={0.4}/>
-          <ReferenceLine y={8} stroke="#f97316" strokeDasharray="4 4" strokeOpacity={0.4}/>
-          <Line type="monotone" dataKey="dor" stroke="#0f172a" strokeWidth={2.5}
-            dot={({cx,cy,payload})=><circle key={payload.label} cx={cx} cy={cy} r={5} fill={dorColor(payload.dor)} stroke="white" strokeWidth={2}/>}
-            activeDot={{r:7,stroke:'white',strokeWidth:2}}/>
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+      <figcaption className="mt-3 flex items-center gap-2 text-xs text-neutral-600">
+        <span className="h-3 w-3 rounded-sm border border-red-200 bg-red-50" aria-hidden="true" />
+        Faixa de dor 7 ou mais
+      </figcaption>
+    </figure>
   );
 }
 
-function CheckinCard({ checkin }) {
-  const [aberto,setAberto]=useState(false);
-  const ok=checkin.respostas?.filter(r=>r.concluido).length??0;
-  const total=checkin.respostas?.length??0;
-  const cor=dorColor(checkin.nivelDor);
+// ─── Histórico de check-ins ────────────────────────────────────────────────
+function LinhaCheckin({ checkin }) {
+  const [aberto, setAberto] = useState(false);
+  const feitas = checkin.respostas?.filter(r => r.concluido).length ?? 0;
+  const total = checkin.respostas?.length ?? 0;
+  const idPainel = `checkin-${checkin.id}`;
+
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <button type="button" onClick={()=>setAberto(v=>!v)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors text-left">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-950 text-white text-xs font-bold flex-shrink-0">D{checkin.diaRecuperacao}</span>
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" style={{background:cor+'15',color:cor,border:`1px solid ${cor}30`}}>{checkin.nivelDor}/10</span>
-          {total>0&&<span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ok===total?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600'}`}>{ok}/{total} tarefas</span>}
-          <span className="text-slate-400 text-xs font-light">{fmtHora(checkin.enviadoEm)}</span>
+    <li>
+      <button
+        type="button"
+        onClick={() => setAberto(v => !v)}
+        aria-expanded={aberto}
+        aria-controls={idPainel}
+        className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:-outline-offset-2"
+      >
+        <PainLevel nivel={checkin.nivelDor} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-ink">Dia {checkin.diaRecuperacao}</p>
+          <p className="text-sm text-neutral-500">{formatarDataHora(checkin.enviadoEm)}</p>
         </div>
-        {aberto?<ChevronUp size={15} strokeWidth={1.5} className="text-slate-400 flex-shrink-0"/>:<ChevronDown size={15} strokeWidth={1.5} className="text-slate-400 flex-shrink-0"/>}
+        {total > 0 && <span className="hidden text-sm text-neutral-600 tabular-nums sm:inline">{feitas} de {total} orientaç{total !== 1 ? 'ões' : 'ão'}</span>}
+        {checkin.observacoes && <span className="hidden rounded-full border border-line px-2 py-0.5 text-xs text-neutral-600 md:inline">Com observação</span>}
+        <ChevronDown size={16} strokeWidth={1.75} className={`flex-shrink-0 text-neutral-500 transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
-      {aberto&&(
-        <div className="border-t border-slate-50 px-5 pb-5 pt-4 space-y-4 bg-slate-50/30">
-          {checkin.observacoes
-            ?<div className="space-y-1"><p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Observação</p><p className="text-slate-700 text-sm font-light leading-relaxed bg-white border border-slate-100 rounded-xl px-4 py-3">"{checkin.observacoes}"</p></div>
-            :<p className="text-slate-400 text-xs font-light italic">Nenhuma observação registrada.</p>}
-          {checkin.respostas?.length>0&&(
-            <div className="space-y-2">
-              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Orientações</p>
-              <ul className="space-y-1.5">
-                {checkin.respostas.map((r,i)=>(
-                  <li key={r.id??i} className="flex items-start gap-3">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${r.concluido?'bg-emerald-500':'bg-slate-200'}`}>
-                      {r.concluido?<CheckCircle2 size={12} strokeWidth={2.5} className="text-white"/>:<XCircle size={12} strokeWidth={2} className="text-slate-400"/>}
-                    </div>
-                    <span className={`text-sm leading-snug ${r.concluido?'text-slate-700':'text-slate-400 line-through'}`}>{r.tarefaDiaProtocolo?.descricao??`Tarefa ${i+1}`}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+
+      {aberto && (
+        <div id={idPainel} className="space-y-4 bg-neutral-50 px-5 pb-5 pt-4">
+          {checkin.observacoes ? (
+            <blockquote className="border-l-2 border-ink pl-3 text-sm leading-relaxed text-ink">“{checkin.observacoes}”</blockquote>
+          ) : (
+            <p className="text-sm text-neutral-500">Sem observação.</p>
+          )}
+          {total > 0 && (
+            <ul className="space-y-2">
+              {checkin.respostas.map((r, i) => (
+                <li key={r.id ?? i} className="flex items-start gap-3 text-sm">
+                  <span
+                    className={`mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full
+                      ${r.concluido ? 'bg-ink text-white' : 'border border-line-strong bg-white'}`}
+                    aria-hidden="true"
+                  >
+                    {r.concluido && <Check size={12} strokeWidth={3} />}
+                  </span>
+                  <span className={r.concluido ? 'text-ink' : 'text-neutral-600'}>
+                    {r.tarefaDiaProtocolo?.descricao ?? `Tarefa ${i + 1}`}
+                    <span className="sr-only">{r.concluido ? ' — feita' : ' — não feita'}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
-    </div>
+    </li>
   );
 }
 
 function Historico({ checkins, loading, erro, onRefresh }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-slate-950 text-sm font-semibold">Histórico de Check-ins</h2>
-        <button type="button" onClick={onRefresh} className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium hover:text-slate-800 transition-colors">
-          <RefreshCw size={13} strokeWidth={1.5}/>Atualizar
-        </button>
-      </div>
-      {loading?(
-        <div className="space-y-3 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-16 bg-white border border-slate-100 rounded-2xl skeleton"/>)}</div>
-      ):erro?(
-        <div className="bg-white border border-slate-100 rounded-2xl p-6 text-center space-y-2">
-          <AlertCircle size={22} strokeWidth={1.5} className="text-red-400 mx-auto"/>
-          <p className="text-slate-600 text-sm font-medium">{erro}</p>
-          <button type="button" onClick={onRefresh} className="text-xs text-slate-950 font-semibold underline underline-offset-2">Tentar novamente</button>
-        </div>
-      ):checkins.length===0?(
-        <div className="bg-white border border-slate-100 rounded-2xl p-10 text-center">
-          <ClipboardList size={22} strokeWidth={1.5} className="text-slate-300 mx-auto mb-2"/>
-          <p className="text-slate-400 text-sm font-light">Nenhum check-in recebido ainda.</p>
-          <p className="text-slate-400 text-xs font-light mt-1">Se o paciente já enviou, clique em "Atualizar".</p>
-        </div>
-      ):(
-        <div className="space-y-3">{[...checkins].reverse().map(c=><CheckinCard key={c.id} checkin={c}/>)}</div>
+    <Card
+      padded={false}
+      title="Check-ins"
+      description={checkins.length ? `${checkins.length} recebido${checkins.length !== 1 ? 's' : ''}` : undefined}
+      actions={
+        <Button variant="ghost" size="sm" onClick={onRefresh}>
+          <RefreshCw size={14} strokeWidth={1.75} aria-hidden="true" />
+          Atualizar
+        </Button>
+      }
+    >
+      {loading ? (
+        <div className="space-y-2 p-5" aria-busy="true">{[1, 2, 3].map(i => <div key={i} className="skeleton h-12" />)}</div>
+      ) : erro ? (
+        <div className="p-5"><InlineAlert action={<Button size="sm" variant="secondary" onClick={onRefresh}>Tentar novamente</Button>}>{erro}</InlineAlert></div>
+      ) : checkins.length === 0 ? (
+        <p className="px-5 py-8 text-sm text-neutral-600">Nenhum check-in recebido ainda. Se o paciente já enviou, clique em Atualizar.</p>
+      ) : (
+        <ul className="divide-y divide-line">{[...checkins].reverse().map(c => <LinhaCheckin key={c.id} checkin={c} />)}</ul>
       )}
-    </div>
+    </Card>
   );
 }
 
-function AcoesCardSemTratamento({ onVincular }) {
+// ─── Blocos da coluna lateral ──────────────────────────────────────────────
+function BlocoRecuperacao({ tratamento, ultimoCheckin }) {
+  const ativo = tratamento.status === 'ativo';
+  const progresso = Math.min((tratamento.diaAtual / tratamento.totalDias) * 100, 100);
+  const nivel = ultimoCheckin?.nivelDor ?? null;
+
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-3">
-      <h3 className="text-slate-950 text-sm font-semibold">Ações Rápidas</h3>
-      <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl"><p className="text-amber-800 text-xs font-medium leading-relaxed">Paciente sem protocolo ativo. Inicie um tratamento para ativar o portal.</p></div>
-      <button type="button" onClick={onVincular} className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-slate-950 text-white text-sm font-semibold hover:bg-slate-800 active:scale-[0.98] transition-all">
-        <Play size={15} strokeWidth={1.5}/>Vincular Protocolo / Iniciar Tratamento
-      </button>
-    </div>
+    <section aria-label="Recuperação" className="on-dark rounded-xl bg-ink p-5 text-white sm:p-6">
+      <p className="text-sm text-neutral-400">{ativo ? 'Recuperação' : 'Tratamento encerrado'}</p>
+      <p className="mt-3 flex items-baseline gap-2 leading-none">
+        <span className="text-base text-neutral-400">Dia</span>
+        <span className="text-6xl font-semibold tracking-tight tabular-nums">{tratamento.diaAtual}</span>
+        <span className="text-sm text-neutral-400 tabular-nums">de {tratamento.totalDias}</span>
+      </p>
+      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-neutral-800" role="progressbar" aria-label="Progresso do protocolo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progresso)}>
+        <div className="h-full rounded-full bg-white" style={{ width: `${progresso}%` }} />
+      </div>
+
+      <div className="mt-6 border-t border-neutral-800 pt-5">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm text-neutral-400">Dor no último check-in</p>
+            <p className={`mt-1 text-4xl font-semibold leading-none tabular-nums ${COR_DOR_NO_ESCURO[zonaDor(nivel)]}`}>
+              {nivel ?? '—'}<span className="text-base font-normal text-neutral-400">/10</span>
+            </p>
+          </div>
+          <p className="text-right text-sm text-neutral-400">
+            {ultimoCheckin ? <>Dia {ultimoCheckin.diaRecuperacao}<br />{formatarRelativo(ultimoCheckin.enviadoEm)}</> : 'Nenhum check-in'}
+          </p>
+        </div>
+        <div className="mt-4"><PainScale nivel={nivel} tone="escuro" /></div>
+      </div>
+    </section>
   );
 }
 
-function AcoesCardComTratamento({ tratamento, onAjustar, onEncerrar }) {
-  const [copiado,setCopiado]=useState(false);
-  const tokenLink=tratamento.tokenPaciente?`${window.location.origin}/p/${tratamento.tokenPaciente}`:null;
-  function copiar(){navigator.clipboard.writeText(tokenLink).then(()=>{setCopiado(true);setTimeout(()=>setCopiado(false),2000);});}
+function ListaDados({ itens }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-3">
-      <h3 className="text-slate-950 text-sm font-semibold">Ações Rápidas</h3>
-      <button type="button" onClick={copiar} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left group">
-        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-slate-200 transition-colors"><Copy size={14} strokeWidth={1.5} className="text-slate-600"/></div>
-        <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-800">{copiado?'✓ Link copiado!':'Copiar link do paciente'}</p><p className="text-[11px] text-slate-400 font-light truncate">{tokenLink}</p></div>
-        <LinkIcon size={13} strokeWidth={1.5} className="text-slate-300 flex-shrink-0"/>
-      </button>
-      <button type="button" onClick={onAjustar} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left group">
-        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-slate-200 transition-colors"><ClipboardList size={14} strokeWidth={1.5} className="text-slate-600"/></div>
-        <p className="text-sm font-medium text-slate-800">Ajustar Protocolo</p>
-      </button>
-      <button type="button" onClick={onEncerrar} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-red-100 hover:border-red-200 hover:bg-red-50 transition-all text-left group">
-        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors"><XCircle size={14} strokeWidth={1.5} className="text-red-500"/></div>
-        <p className="text-sm font-medium text-red-700">Encerrar tratamento</p>
-      </button>
-    </div>
+    <dl className="divide-y divide-line">
+      {itens.filter(Boolean).map(({ termo, valor }) => (
+        <div key={termo} className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+          <dt className="text-sm text-neutral-500">{termo}</dt>
+          <dd className="min-w-0 text-right text-sm text-ink">{valor}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
+// ─── Modais ────────────────────────────────────────────────────────────────
 function ModalVincular({ isOpen, pacienteId, onClose, onSuccess }) {
-  const [prots,setProts]=useState([]);
-  const [load,setLoad]=useState(false);
-  const [form,setForm]=useState({protocoloId:'',nomeProcedimento:'',dataProcedimento:''});
-  const [saving,setSaving]=useState(false);
-  const [erro,setErro]=useState('');
+  const [prots,  setProts]  = useState([]);
+  const [load,   setLoad]   = useState(false);
+  const [form,   setForm]   = useState({ protocoloId: '', nomeProcedimento: '', dataProcedimento: '' });
+  const [saving, setSaving] = useState(false);
+  const [erro,   setErro]   = useState('');
 
-  // FIX: useEffect (não useState) para carregar protocolos ao abrir modal
-  useEffect(()=>{
-    if(!isOpen)return;
-    setLoad(true);setErro('');setForm({protocoloId:'',nomeProcedimento:'',dataProcedimento:''});
-    getProtocols().then(d=>setProts(d.filter(p=>p.ativo)??[])).catch(()=>setErro('Erro ao carregar protocolos.')).finally(()=>setLoad(false));
-  },[isOpen]);
+  // useEffect (não useState) para carregar protocolos ao abrir o modal
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoad(true); setErro(''); setForm({ protocoloId: '', nomeProcedimento: '', dataProcedimento: '' });
+    getProtocols().then(d => setProts(d.filter(p => p.ativo) ?? [])).catch(() => setErro('Erro ao carregar protocolos.')).finally(() => setLoad(false));
+  }, [isOpen]);
 
-  async function submit(e){
+  async function submit(e) {
     e.preventDefault();
-    if(!form.protocoloId||!form.nomeProcedimento||!form.dataProcedimento){setErro('Preencha todos os campos.');return;}
-    setSaving(true);setErro('');
-    try{await createTreatment({pacienteId,protocoloId:form.protocoloId,nomeProcedimento:form.nomeProcedimento.trim(),dataProcedimento:form.dataProcedimento});onSuccess();onClose();}
-    catch(err){setErro(err.response?.data?.message||'Erro ao iniciar tratamento.');}
-    finally{setSaving(false);}
+    if (!form.protocoloId || !form.nomeProcedimento || !form.dataProcedimento) { setErro('Preencha todos os campos.'); return; }
+    setSaving(true); setErro('');
+    try {
+      await createTreatment({ pacienteId, protocoloId: form.protocoloId, nomeProcedimento: form.nomeProcedimento.trim(), dataProcedimento: form.dataProcedimento });
+      onSuccess(); onClose();
+    } catch (err) { setErro(err.response?.data?.message || 'Erro ao iniciar tratamento.'); }
+    finally { setSaving(false); }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Vincular Protocolo / Iniciar Tratamento">
+    <Modal isOpen={isOpen} onClose={onClose} title="Iniciar tratamento">
       <form onSubmit={submit} noValidate className="space-y-4">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Protocolo *</label>
-          {load?<div className="h-12 skeleton rounded-xl"/>:prots.length===0
-            ?<div className="p-3.5 bg-amber-50 border border-amber-100 rounded-xl"><p className="text-amber-800 text-xs font-medium">Nenhum protocolo ativo. <a href="/protocols/new" className="underline font-semibold">Criar protocolo</a></p></div>
-            :<select value={form.protocoloId} onChange={e=>setForm(p=>({...p,protocoloId:e.target.value}))} className={`${INPUT} cursor-pointer`}>
-              <option value="">Selecione…</option>
-              {prots.map(p=><option key={p.id} value={p.id}>{p.nome} ({p.diasPadrao} dias)</option>)}
-            </select>}
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Nome do Procedimento *</label>
-          <input type="text" placeholder="Ex: Extração de sisos" value={form.nomeProcedimento} onChange={e=>setForm(p=>({...p,nomeProcedimento:e.target.value}))} className={INPUT}/>
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Data do Procedimento *</label>
-          <input type="date" max={new Date().toISOString().split('T')[0]} value={form.dataProcedimento} onChange={e=>setForm(p=>({...p,dataProcedimento:e.target.value}))} className={INPUT}/>
-          <p className="text-xs text-slate-400 font-light">Dia 1 = data desta cirurgia.</p>
-        </div>
-        {erro&&<div className="flex items-center gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl"><div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"/><p className="text-sm text-red-700 font-medium">{erro}</p></div>}
-        <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
-          <button type="submit" disabled={saving||prots.length===0} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-950 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-all">
-            {saving?<><Loader2 size={15} strokeWidth={2} className="animate-spin"/>Iniciando…</>:<><Play size={15} strokeWidth={1.5}/>Iniciar Tratamento</>}
-          </button>
+        {load ? <div className="skeleton h-16" /> : prots.length === 0 ? (
+          <InlineAlert tone="neutro">
+            Nenhum protocolo ativo. <Link to="/protocols/new" className="underline underline-offset-2">Criar protocolo</Link>
+          </InlineAlert>
+        ) : (
+          <Field label="Protocolo">
+            <select value={form.protocoloId} onChange={e => setForm(p => ({ ...p, protocoloId: e.target.value }))} className={inputClass(false, { className: 'cursor-pointer' })}>
+              <option value="">Selecione</option>
+              {prots.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.diasPadrao} dias)</option>)}
+            </select>
+          </Field>
+        )}
+        <Field label="Nome do procedimento">
+          <input type="text" placeholder="Ex.: Extração de sisos" value={form.nomeProcedimento} onChange={e => setForm(p => ({ ...p, nomeProcedimento: e.target.value }))} className={inputClass()} />
+        </Field>
+        <Field label="Data do procedimento" hint="O Dia 1 da recuperação é a data do procedimento.">
+          <input type="date" max={new Date().toISOString().split('T')[0]} value={form.dataProcedimento} onChange={e => setForm(p => ({ ...p, dataProcedimento: e.target.value }))} className={inputClass()} />
+        </Field>
+        {erro && <InlineAlert>{erro}</InlineAlert>}
+        <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" loading={saving} disabled={prots.length === 0}>
+            {!saving && <Play size={15} strokeWidth={1.75} aria-hidden="true" />}
+            {saving ? 'Iniciando…' : 'Iniciar tratamento'}
+          </Button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function ModalAjustar({ isOpen, tratamento, onClose, onSuccess }) {
-  const [nome,setNome]=useState('');const[saving,setSaving]=useState(false);const[erro,setErro]=useState('');
+function ModalEditarProcedimento({ isOpen, tratamento, onClose, onSuccess }) {
+  const [nome, setNome] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState('');
 
-  // FIX: useEffect (não useState)
-  useEffect(()=>{if(isOpen&&tratamento){setNome(tratamento.nomeProcedimento??'');setErro('');}},[isOpen,tratamento]);
+  // useEffect (não useState)
+  useEffect(() => { if (isOpen && tratamento) { setNome(tratamento.nomeProcedimento ?? ''); setErro(''); } }, [isOpen, tratamento]);
 
-  async function submit(e){e.preventDefault();if(!nome.trim()){setErro('Nome obrigatório.');return;}setSaving(true);setErro('');try{await updateTreatment(tratamento.id,{nomeProcedimento:nome.trim()});onSuccess();onClose();}catch(err){setErro(err.response?.data?.message||'Erro.');}finally{setSaving(false);}}
+  async function submit(e) {
+    e.preventDefault();
+    if (!nome.trim()) { setErro('Informe o nome do procedimento.'); return; }
+    setSaving(true); setErro('');
+    try { await updateTreatment(tratamento.id, { nomeProcedimento: nome.trim() }); onSuccess(); onClose(); }
+    catch (err) { setErro(err.response?.data?.message || 'Erro ao salvar.'); }
+    finally { setSaving(false); }
+  }
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Ajustar Protocolo">
+    <Modal isOpen={isOpen} onClose={onClose} title="Editar procedimento" size="sm">
       <form onSubmit={submit} noValidate className="space-y-4">
-        <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Protocolo</p><p className="text-slate-800 text-sm font-semibold mt-0.5">{tratamento?.versaoProtocolo?.protocolo?.nome??'—'}</p></div>
-        <div className="space-y-1.5"><label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Nome do Procedimento</label><input type="text" value={nome} onChange={e=>setNome(e.target.value)} className={INPUT}/></div>
-        {erro&&<div className="flex items-center gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl"><div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"/><p className="text-sm text-red-700 font-medium">{erro}</p></div>}
-        <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
-          <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-950 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-all">
-            {saving?<><Loader2 size={15} strokeWidth={2} className="animate-spin"/>Salvando…</>:<><Save size={15} strokeWidth={1.5}/>Salvar</>}
-          </button>
+        <p className="text-sm text-neutral-600">Protocolo: <span className="font-medium text-ink">{tratamento?.versaoProtocolo?.protocolo?.nome ?? '—'}</span></p>
+        <Field label="Nome do procedimento">
+          <input type="text" value={nome} onChange={e => setNome(e.target.value)} className={inputClass()} />
+        </Field>
+        {erro && <InlineAlert>{erro}</InlineAlert>}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" loading={saving}>{saving ? 'Salvando…' : 'Salvar'}</Button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function ModalEncerrar({ isOpen, tratamento, onClose, onSuccess }) {
-  const [enc,setEnc]=useState(false);const[erro,setErro]=useState('');
-  async function handle(){setEnc(true);setErro('');try{await updateTreatment(tratamento.id,{status:'finalizado'});onSuccess();onClose();}catch(err){setErro(err.response?.data?.message||'Erro.');}finally{setEnc(false);}}
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Encerrar Tratamento" size="sm">
-      <div className="space-y-4">
-        <p className="text-slate-600 text-sm font-light leading-relaxed">Ao encerrar, o link do paciente será desativado e check-ins não poderão mais ser enviados.</p>
-        {erro&&<div className="flex items-center gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl"><div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"/><p className="text-sm text-red-700 font-medium">{erro}</p></div>}
-        <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
-          <button type="button" onClick={handle} disabled={enc} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-all">
-            {enc?<><Loader2 size={15} strokeWidth={2} className="animate-spin"/>Encerrando…</>:<><XCircle size={15} strokeWidth={1.5}/>Encerrar</>}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
+// ─── Página ────────────────────────────────────────────────────────────────
 export default function PatientProfile() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { paciente, tratamento, checkins, loading, loadingCheckins, erro, erroCheckins, refetch, refetchCheckins } = usePatientProfile(id);
-  const [modalVincular,setModalVincular]=useState(false);
-  const [modalAjustar, setModalAjustar] =useState(false);
-  const [modalEncerrar,setModalEncerrar]=useState(false);
+  const [modalVincular, setModalVincular] = useState(false);
+  const [modalEditar,   setModalEditar]   = useState(false);
+  const [modalEncerrar, setModalEncerrar] = useState(false);
+  const [copia,         setCopia]         = useState('');
 
-  if (loading) return <Skeleton/>;
+  if (loading) return <Skeleton />;
   if (erro) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4 max-w-7xl mx-auto">
-      <AlertCircle size={32} strokeWidth={1.5} className="text-red-400"/>
-      <p className="text-slate-700 text-sm font-semibold">{erro}</p>
-      <div className="flex gap-3">
-        <button type="button" onClick={()=>navigate('/patients')} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"><ArrowLeft size={14} strokeWidth={1.5}/>Voltar</button>
-        <button type="button" onClick={refetch} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-950 text-white text-sm font-medium hover:bg-slate-800 transition-colors"><RefreshCw size={14} strokeWidth={1.5}/>Tentar novamente</button>
-      </div>
+    <div className="space-y-6">
+      <Link to="/patients" className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-ink"><ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />Pacientes</Link>
+      <InlineAlert action={<Button size="sm" variant="secondary" onClick={refetch}>Tentar novamente</Button>}>{erro}</InlineAlert>
     </div>
   );
   if (!paciente) return null;
 
-  const ultimoCheckin=checkins.length>0?checkins[checkins.length-1]:null;
-  const idade=calcularIdade(paciente.dataNascimento);
+  const ultimoCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
+  const idade = calcularIdade(paciente.dataNascimento);
+  const ativo = tratamento?.status === 'ativo';
+  const statusClinico = !tratamento ? 'sem_tratamento' : !ativo ? 'encerrado' : calculatePatientStatus(ultimoCheckin);
+  const linkPaciente = tratamento?.tokenPaciente ? `${window.location.origin}/p/${tratamento.tokenPaciente}` : null;
+
+  function copiarLink() {
+    navigator.clipboard.writeText(linkPaciente)
+      .then(() => { setCopia('ok'); setTimeout(() => setCopia(''), 2000); })
+      .catch(() => setCopia('erro'));
+  }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <button type="button" onClick={()=>navigate('/patients')} className="inline-flex items-center gap-2 text-slate-500 text-sm font-medium hover:text-slate-800 transition-colors">
-        <ArrowLeft size={16} strokeWidth={1.5}/>Voltar para Pacientes
-      </button>
+    <div className="space-y-6">
+      <Link to="/patients" className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 transition-colors hover:text-ink">
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+        Pacientes
+      </Link>
 
-      <header className="bg-white border border-slate-100 rounded-2xl shadow-card p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0 text-2xl font-extrabold text-slate-600">{getInitials(paciente.nome)}</div>
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-slate-950 text-xl font-extrabold tracking-tight">{paciente.nome}</h1>
-              <RecoveryStatusBadge status="sem_checkin"/>
+      <header className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <Avatar nome={paciente.nome} size="lg" tone="escuro" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{paciente.nome}</h1>
+              <RecoveryStatusBadge status={statusClinico} />
             </div>
-            {tratamento?<p className="text-slate-500 text-sm font-light">{tratamento.nomeProcedimento}</p>:<p className="text-amber-600 text-sm font-medium">Sem protocolo vinculado</p>}
-            <div className="flex flex-wrap items-center gap-4">
-              {tratamento&&<div className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-950 text-white text-[11px] font-bold">D{tratamento.diaAtual}</span><span className="text-slate-500 text-xs font-light">de {tratamento.totalDias} dias</span></div>}
-              {idade!==null&&<span className="text-slate-400 text-xs font-light">{idade} anos</span>}
-              {checkins.length>0&&<span className="text-slate-400 text-xs font-light">{checkins.length} check-in{checkins.length!==1?'s':''} recebido{checkins.length!==1?'s':''}</span>}
-            </div>
+            <p className="mt-1 text-sm text-neutral-600">
+              {tratamento ? tratamento.nomeProcedimento : 'Sem tratamento'}
+              {idade !== null && ` · ${idade} anos`}
+            </p>
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {ativo ? (
+            <>
+              <Button variant="secondary" onClick={copiarLink}>
+                {copia === 'ok' ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.75} aria-hidden="true" />}
+                {copia === 'ok' ? 'Link copiado' : 'Copiar link do paciente'}
+              </Button>
+              <Button variant="secondary" onClick={() => setModalEditar(true)}>
+                <Pencil size={15} strokeWidth={1.75} aria-hidden="true" />
+                Editar procedimento
+              </Button>
+              <Button variant="secondary" onClick={() => setModalEncerrar(true)} className="hover:border-red-600 hover:text-red-700">
+                <XCircle size={16} strokeWidth={1.75} aria-hidden="true" />
+                Encerrar
+              </Button>
+            </>
+          ) : (
+            <Button onClick={() => setModalVincular(true)}>
+              <Play size={15} strokeWidth={1.75} aria-hidden="true" />
+              {tratamento ? 'Iniciar novo tratamento' : 'Iniciar tratamento'}
+            </Button>
+          )}
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="space-y-5">
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5">
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-4">Nível de Dor Atual</p>
-            <PainScale nivel={ultimoCheckin?.nivelDor??null} ultimaAtualizacao={ultimoCheckin?`Dia ${ultimoCheckin.diaRecuperacao}`:'Sem registros ainda.'}/>
-          </div>
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-4">
-            <h3 className="text-slate-950 text-sm font-semibold">Informações</h3>
-            <ul className="space-y-3">
-              {[{icon:User,label:'Idade',value:idade!==null?`${idade} anos`:'—'},{icon:Phone,label:'Telefone',value:paciente.telefone??'—'},{icon:Calendar,label:'Nascimento',value:fmtData(paciente.dataNascimento)}].map(({icon:Icon,label,value})=>(
-                <li key={label} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0"><Icon size={14} strokeWidth={1.5} className="text-slate-400"/></div>
-                  <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{label}</p><p className="text-slate-800 text-sm font-medium">{value}</p></div>
-                </li>
-              ))}
-              {tratamento&&<li className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0"><CheckCircle2 size={14} strokeWidth={1.5} className="text-slate-400"/></div>
-                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Progresso</p>
-                  <div className="flex items-center gap-2 mt-1"><div className="w-24 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-slate-700" style={{width:`${Math.min((tratamento.diaAtual/tratamento.totalDias)*100,100)}%`}}/></div><span className="text-slate-700 text-xs font-medium">D{tratamento.diaAtual}/{tratamento.totalDias}</span></div>
-                </div>
-              </li>}
-            </ul>
-            {paciente.observacoes&&<div className="pt-3 border-t border-slate-50"><p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1.5">Observações</p><p className="text-slate-600 text-xs font-light leading-relaxed">"{paciente.observacoes}"</p></div>}
-          </div>
-          {tratamento
-            ?<AcoesCardComTratamento tratamento={tratamento} onAjustar={()=>setModalAjustar(true)} onEncerrar={()=>setModalEncerrar(true)}/>
-            :<AcoesCardSemTratamento onVincular={()=>setModalVincular(true)}/>}
+      {copia === 'erro' && (
+        <InlineAlert tone="neutro">Não foi possível copiar automaticamente. Link do paciente: <span className="break-all font-normal">{linkPaciente}</span></InlineAlert>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="min-w-0 space-y-5 lg:col-span-8">
+          {tratamento ? (
+            <>
+              <Card title="Evolução da dor" description="Nível informado pelo paciente em cada check-in">
+                {checkins.length > 0
+                  ? <GraficoDor checkins={checkins} />
+                  : <p className="py-10 text-center text-sm text-neutral-600">O gráfico aparece a partir do primeiro check-in.</p>}
+              </Card>
+              <Historico checkins={checkins} loading={loadingCheckins} erro={erroCheckins} onRefresh={refetchCheckins} />
+            </>
+          ) : (
+            <Card>
+              <EmptyState
+                icon={ClipboardList}
+                title="Nenhum tratamento"
+                subtitle="Inicie um tratamento para gerar o link do paciente e começar a receber check-ins."
+                action={<Button onClick={() => setModalVincular(true)}><Play size={15} strokeWidth={1.75} aria-hidden="true" />Iniciar tratamento</Button>}
+              />
+            </Card>
+          )}
         </div>
 
-        <div className="xl:col-span-2 space-y-5">
-          {checkins.length>0&&<GraficoDor checkins={checkins}/>}
-          <Historico checkins={checkins} loading={loadingCheckins} erro={erroCheckins} onRefresh={refetchCheckins}/>
-        </div>
+        <aside className="space-y-5 lg:col-span-4" aria-label="Resumo do paciente">
+          {tratamento && <BlocoRecuperacao tratamento={tratamento} ultimoCheckin={ultimoCheckin} />}
+
+          <Card title="Paciente">
+            <ListaDados itens={[
+              { termo: 'Idade',      valor: idade !== null ? `${idade} anos` : '—' },
+              { termo: 'Nascimento', valor: formatarDataCivil(paciente.dataNascimento) },
+              { termo: 'Telefone',   valor: paciente.telefone ? <a href={`tel:${paciente.telefone.replace(/\D/g, '')}`} className="underline-offset-2 hover:underline">{paciente.telefone}</a> : '—' },
+              paciente.email && { termo: 'E-mail', valor: <span className="break-all">{paciente.email}</span> },
+            ]} />
+            {paciente.observacoes && (
+              <div className="mt-4 border-t border-line pt-4">
+                <p className="text-sm text-neutral-500">Observações</p>
+                <p className="mt-1 text-sm leading-relaxed text-ink">{paciente.observacoes}</p>
+              </div>
+            )}
+          </Card>
+
+          {tratamento && (
+            <Card title="Tratamento">
+              <ListaDados itens={[
+                { termo: 'Procedimento', valor: tratamento.nomeProcedimento },
+                { termo: 'Protocolo',    valor: `${tratamento.versaoProtocolo?.protocolo?.nome ?? '—'} · v${tratamento.versaoProtocolo?.versao ?? 1}` },
+                { termo: 'Data',         valor: formatarDataCivil(tratamento.dataProcedimento) },
+                { termo: 'Situação',     valor: ativo ? 'Em andamento' : 'Encerrado' },
+              ]} />
+            </Card>
+          )}
+        </aside>
       </div>
 
-      <ModalVincular isOpen={modalVincular} pacienteId={id} onClose={()=>setModalVincular(false)} onSuccess={refetch}/>
-      <ModalAjustar  isOpen={modalAjustar}  tratamento={tratamento} onClose={()=>setModalAjustar(false)} onSuccess={refetch}/>
-      <ModalEncerrar isOpen={modalEncerrar} tratamento={tratamento} onClose={()=>setModalEncerrar(false)} onSuccess={refetch}/>
+      <ModalVincular isOpen={modalVincular} pacienteId={id} onClose={() => setModalVincular(false)} onSuccess={refetch} />
+      <ModalEditarProcedimento isOpen={modalEditar} tratamento={tratamento} onClose={() => setModalEditar(false)} onSuccess={refetch} />
+      <ConfirmDialog
+        isOpen={modalEncerrar}
+        titulo="Encerrar tratamento"
+        descricao="Ao encerrar, o link do paciente é desativado e novos check-ins não poderão ser enviados."
+        labelConfirmar="Encerrar tratamento"
+        tom="danger"
+        onClose={() => setModalEncerrar(false)}
+        onConfirmar={async () => { await updateTreatment(tratamento.id, { status: 'finalizado' }); refetch(); }}
+      />
     </div>
   );
 }
