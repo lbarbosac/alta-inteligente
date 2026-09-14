@@ -1,143 +1,147 @@
 // Arquivo: frontend/src/pages/Protocols/ProtocolDetail/index.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import {
-  ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Clock,
-  RefreshCw, Archive, CheckCircle2, AlertCircle, Edit3,
-  Save, X, Plus, Trash2, Loader2,
-} from 'lucide-react';
-import Modal from '../../../components/Modal';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Archive, ChevronDown, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import Button from '../../../components/Button';
+import Card from '../../../components/Card';
+import ConfirmDialog from '../../../components/ConfirmDialog';
+import Field, { inputClass } from '../../../components/Field';
+import InlineAlert from '../../../components/InlineAlert';
 import { getProtocol, archiveProtocol, unarchiveProtocol, editarProtocolo } from '../../../services/protocolService';
 
 function Skeleton() {
   return (
-    <div className="space-y-6 max-w-3xl mx-auto animate-pulse">
-      <div className="h-5 w-32 skeleton"/>
-      <div className="bg-white border border-slate-100 rounded-2xl p-6 space-y-3">
-        <div className="h-6 w-48 skeleton"/><div className="h-4 w-72 skeleton"/>
-        <div className="flex gap-2 mt-4"><div className="h-6 w-20 skeleton rounded-full"/><div className="h-6 w-16 skeleton rounded-full"/></div>
-      </div>
-      {[1,2,3].map(i=><div key={i} className="bg-white border border-slate-100 rounded-2xl p-5"><div className="h-4 w-24 skeleton"/></div>)}
+    <div className="mx-auto max-w-3xl space-y-6" aria-busy="true">
+      <div className="skeleton h-5 w-24" />
+      <div className="space-y-2"><div className="skeleton h-8 w-64" /><div className="skeleton h-4 w-80 max-w-full" /></div>
+      <div className="skeleton h-72 rounded-xl" />
     </div>
   );
 }
 
-function ModalConfirmar({ isOpen, titulo, descricao, labelConfirmar, corBotao, onClose, onConfirmar }) {
-  const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState('');
-  async function handle() {
-    setCarregando(true); setErro('');
-    try { await onConfirmar(); onClose(); }
-    catch (err) { setErro(err.response?.data?.message || 'Erro ao realizar ação.'); }
-    finally { setCarregando(false); }
-  }
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={titulo} size="sm">
-      <div className="space-y-4">
-        <p className="text-slate-600 text-sm font-light leading-relaxed">{descricao}</p>
-        {erro && <div className="flex items-center gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl"><div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"/><p className="text-sm text-red-700 font-medium">{erro}</p></div>}
-        <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
-          <button type="button" onClick={handle} disabled={carregando}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50 transition-all ${corBotao}`}>
-            {carregando ? <><Loader2 size={15} strokeWidth={2} className="animate-spin"/>Aguarde…</> : labelConfirmar}
-          </button>
-        </div>
-      </div>
-    </Modal>
+function BadgeSituacao({ ativo }) {
+  return ativo ? (
+    <span className="inline-flex h-7 items-center gap-2 rounded-full border border-line bg-white px-2.5 text-xs font-medium text-ink">
+      <span className="h-2 w-2 rounded-full bg-ink" aria-hidden="true" />Ativo
+    </span>
+  ) : (
+    <span className="inline-flex h-7 items-center gap-2 rounded-full border border-line bg-neutral-100 px-2.5 text-xs font-medium text-neutral-600">
+      <Archive size={12} strokeWidth={2} aria-hidden="true" />Arquivado
+    </span>
   );
 }
 
 // ─── Dia em modo visualização ──────────────────────────────────────────────
 function DiaView({ dia }) {
   const [aberto, setAberto] = useState(false);
+  const total = dia.tarefas?.length ?? 0;
+
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-      <button type="button" onClick={() => setAberto(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors text-left">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-950 text-white text-xs font-bold flex-shrink-0">D{dia.numeroDia}</span>
-          <div>
-            <p className="text-slate-800 text-sm font-medium leading-none">{dia.titulo || `Dia ${dia.numeroDia}`}</p>
-            <p className="text-slate-400 text-xs font-light mt-0.5">{dia.tarefas?.length > 0 ? `${dia.tarefas.length} orientaç${dia.tarefas.length !== 1 ? 'ões' : 'ão'}` : 'Sem orientações'}</p>
-          </div>
-        </div>
-        {aberto ? <ChevronUp size={16} strokeWidth={1.5} className="text-slate-400"/> : <ChevronDown size={16} strokeWidth={1.5} className="text-slate-400"/>}
+    <li>
+      <button
+        type="button"
+        onClick={() => setAberto(v => !v)}
+        aria-expanded={aberto}
+        className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:-outline-offset-2"
+      >
+        <span className="inline-flex h-8 min-w-10 items-center justify-center rounded-md bg-neutral-100 px-2 text-xs font-semibold text-ink tabular-nums">D{dia.numeroDia}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-ink">{dia.titulo || `Dia ${dia.numeroDia}`}</span>
+          <span className="block text-sm text-neutral-500">{total > 0 ? `${total} orientaç${total !== 1 ? 'ões' : 'ão'}` : 'Sem orientações'}</span>
+        </span>
+        <ChevronDown size={16} strokeWidth={1.75} className={`text-neutral-500 transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
       {aberto && (
-        dia.tarefas?.length > 0
-          ? <ul className="border-t border-slate-50 divide-y divide-slate-50">
+        <div className="bg-neutral-50 px-5 pb-4 pt-3">
+          {total > 0 ? (
+            <ol className="space-y-2">
               {dia.tarefas.map((t, i) => (
-                <li key={t.id} className="flex items-start gap-3 px-5 py-3.5">
-                  <span className="text-slate-300 text-xs font-semibold w-5 text-right flex-shrink-0 mt-0.5">{i + 1}.</span>
-                  <p className="text-slate-700 text-sm font-light leading-snug">{t.descricao}</p>
+                <li key={t.id} className="flex gap-3 text-sm">
+                  <span className="w-5 flex-shrink-0 text-right text-neutral-500 tabular-nums">{i + 1}.</span>
+                  <span className="leading-snug text-ink">{t.descricao}</span>
                 </li>
               ))}
-            </ul>
-          : <div className="border-t border-slate-50 px-5 py-4"><p className="text-slate-400 text-xs font-light">Nenhuma orientação cadastrada.</p></div>
+            </ol>
+          ) : (
+            <p className="text-sm text-neutral-600">Nenhuma orientação cadastrada.</p>
+          )}
+        </div>
       )}
-    </div>
+    </li>
   );
 }
 
 // ─── Dia em modo edição ────────────────────────────────────────────────────
 function DiaEdit({ dia, onChange, onRemove }) {
   const [aberto, setAberto] = useState(false);
+  const tarefas = dia.tarefas || [];
 
-  function addTarefa() { onChange({ ...dia, tarefas: [...(dia.tarefas || []), { descricao: '' }] }); }
-  function setTarefa(idx, descricao) { onChange({ ...dia, tarefas: dia.tarefas.map((t, i) => i === idx ? { ...t, descricao } : t) }); }
-  function removeTarefa(idx) { onChange({ ...dia, tarefas: dia.tarefas.filter((_, i) => i !== idx) }); }
+  function addTarefa() { onChange({ ...dia, tarefas: [...tarefas, { descricao: '' }] }); }
+  function setTarefa(idx, descricao) { onChange({ ...dia, tarefas: tarefas.map((t, i) => i === idx ? { ...t, descricao } : t) }); }
+  function removeTarefa(idx) { onChange({ ...dia, tarefas: tarefas.filter((_, i) => i !== idx) }); }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-      <button type="button" onClick={() => setAberto(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors text-left">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-950 text-white text-xs font-bold flex-shrink-0">D{dia.numeroDia}</span>
-          <div>
-            <p className="text-slate-800 text-sm font-medium leading-none">{dia.titulo || `Dia ${dia.numeroDia}`}</p>
-            <p className="text-slate-400 text-xs font-light mt-0.5">{(dia.tarefas || []).length} orientaç{(dia.tarefas || []).length !== 1 ? 'ões' : 'ão'}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={e => { e.stopPropagation(); onRemove(); }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
-            <Trash2 size={14} strokeWidth={1.5}/>
-          </button>
-          {aberto ? <ChevronUp size={16} strokeWidth={1.5} className="text-slate-400"/> : <ChevronDown size={16} strokeWidth={1.5} className="text-slate-400"/>}
-        </div>
-      </button>
+    <li>
+      <div className="flex items-center gap-2 pr-3">
+        <button
+          type="button"
+          onClick={() => setAberto(v => !v)}
+          aria-expanded={aberto}
+          className="flex min-w-0 flex-1 items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:-outline-offset-2"
+        >
+          <span className="inline-flex h-8 min-w-10 items-center justify-center rounded-md bg-neutral-100 px-2 text-xs font-semibold text-ink tabular-nums">D{dia.numeroDia}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-ink">{dia.titulo || `Dia ${dia.numeroDia}`}</span>
+            <span className="block text-sm text-neutral-500">{tarefas.length} orientaç{tarefas.length !== 1 ? 'ões' : 'ão'}</span>
+          </span>
+          <ChevronDown size={16} strokeWidth={1.75} className={`text-neutral-500 transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remover dia ${dia.numeroDia}`}
+          className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-red-700"
+        >
+          <Trash2 size={16} strokeWidth={1.75} />
+        </button>
+      </div>
 
       {aberto && (
-        <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-4 bg-slate-50/30">
-          <div className="space-y-1.5">
-            <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">Título do dia (opcional)</label>
-            <input type="text" value={dia.titulo || ''} onChange={e => onChange({ ...dia, titulo: e.target.value })}
-              placeholder={`Ex: Cuidados Iniciais — Dia ${dia.numeroDia}`}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-300 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8 transition-all"/>
-          </div>
+        <div className="space-y-4 bg-neutral-50 px-5 pb-5 pt-4">
+          <Field label="Título do dia" opcional>
+            <input type="text" value={dia.titulo || ''} onChange={e => onChange({ ...dia, titulo: e.target.value })} placeholder="Ex.: Cuidados iniciais" className={inputClass()} />
+          </Field>
           <div className="space-y-2">
-            <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">Orientações do paciente</label>
-            {(dia.tarefas || []).map((t, idx) => (
+            <p className="text-sm font-medium text-ink">Orientações ao paciente</p>
+            {tarefas.map((t, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                <span className="text-slate-300 text-xs font-semibold w-5 text-right flex-shrink-0">{idx + 1}.</span>
-                <input type="text" value={t.descricao} onChange={e => setTarefa(idx, e.target.value)}
-                  placeholder="Ex: Tomar Amoxicilina 500mg a cada 8 horas"
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-300 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8 transition-all"/>
-                <button type="button" onClick={() => removeTarefa(idx)}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
-                  <Trash2 size={14} strokeWidth={1.5}/>
+                <span className="w-5 flex-shrink-0 text-right text-sm text-neutral-500 tabular-nums">{idx + 1}.</span>
+                <input
+                  type="text"
+                  value={t.descricao}
+                  onChange={e => setTarefa(idx, e.target.value)}
+                  placeholder="Ex.: Tomar amoxicilina 500 mg a cada 8 horas"
+                  aria-label={`Orientação ${idx + 1} do dia ${dia.numeroDia}`}
+                  className={inputClass(false, { className: 'flex-1' })}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeTarefa(idx)}
+                  aria-label={`Remover orientação ${idx + 1}`}
+                  className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-neutral-600 transition-colors hover:bg-white hover:text-red-700"
+                >
+                  <Trash2 size={16} strokeWidth={1.75} />
                 </button>
               </div>
             ))}
-            <button type="button" onClick={addTarefa}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium hover:text-slate-800 transition-colors mt-1">
-              <Plus size={13} strokeWidth={2}/>Adicionar orientação
-            </button>
+            <Button variant="ghost" size="sm" onClick={addTarefa}>
+              <Plus size={15} strokeWidth={2} aria-hidden="true" />
+              Adicionar orientação
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </li>
   );
 }
 
@@ -216,16 +220,12 @@ export default function ProtocolDetail() {
     } finally { setSalvando(false); }
   }
 
-  if (loading) return <Skeleton/>;
+  if (loading) return <Skeleton />;
 
   if (erro) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4 max-w-3xl mx-auto">
-      <AlertCircle size={32} strokeWidth={1.5} className="text-red-400"/>
-      <p className="text-slate-700 text-sm font-semibold">{erro}</p>
-      <div className="flex gap-3">
-        <button type="button" onClick={() => navigate('/protocols')} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"><ArrowLeft size={14} strokeWidth={1.5}/>Voltar</button>
-        <button type="button" onClick={buscar} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-950 text-white text-sm font-medium hover:bg-slate-800 transition-colors"><RefreshCw size={14} strokeWidth={1.5}/>Tentar novamente</button>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link to="/protocols" className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-ink"><ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />Protocolos</Link>
+      <InlineAlert action={<Button size="sm" variant="secondary" onClick={buscar}>Tentar novamente</Button>}>{erro}</InlineAlert>
     </div>
   );
 
@@ -233,166 +233,131 @@ export default function ProtocolDetail() {
   const dias   = versao?.dias ?? [];
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <button type="button" onClick={() => navigate('/protocols')}
-        className="inline-flex items-center gap-2 text-slate-500 text-sm font-medium hover:text-slate-800 transition-colors">
-        <ArrowLeft size={16} strokeWidth={1.5}/>Voltar para Protocolos
-      </button>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link to="/protocols" className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 transition-colors hover:text-ink">
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+        Protocolos
+      </Link>
 
-      {/* Header */}
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-6 space-y-4">
-        {modoEdicao ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-slate-950 text-sm font-semibold">Editando Protocolo</h2>
-              <button type="button" onClick={() => { setModoEdicao(false); setErroEdicao(''); }}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors">
-                <X size={14} strokeWidth={1.5}/>Cancelar
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Nome *</label>
-                <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8 transition-all"/>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Descrição (opcional)</label>
-                <textarea rows={2} value={editDescricao} onChange={e => setEditDescricao(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 outline-none resize-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8 transition-all"/>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1 flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-slate-950 text-xl font-extrabold tracking-tight">{protocolo.nome}</h1>
-                {!protocolo.ativo
-                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium"><Archive size={9} strokeWidth={2}/>Arquivado</span>
-                  : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium ring-1 ring-emerald-100"><CheckCircle2 size={10} strokeWidth={2}/>Ativo</span>}
-              </div>
-              {protocolo.descricao && <p className="text-slate-500 text-sm font-light leading-relaxed">{protocolo.descricao}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 text-slate-600 text-xs font-medium ring-1 ring-slate-100">
-            <Clock size={12} strokeWidth={1.5}/>{modoEdicao ? editDiasArr.length : protocolo.diasPadrao} dias
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 text-slate-600 text-xs font-medium ring-1 ring-slate-100">
-            <ClipboardList size={12} strokeWidth={1.5}/>{modoEdicao ? editDiasArr.length : dias.length} dia{dias.length !== 1 ? 's' : ''} configurado{dias.length !== 1 ? 's' : ''}
-          </span>
-          {versao && <span className="text-slate-400 text-xs font-light">Versão {versao.versao}</span>}
-        </div>
-
-        {/* Botões de ação — modo visualização */}
-        {!modoEdicao && (
-          <div className="flex gap-2 pt-2 border-t border-slate-50 flex-wrap">
-            {protocolo.ativo && (
-              <button type="button" onClick={entrarEdicao}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition-all">
-                <Edit3 size={13} strokeWidth={1.5}/>Editar Protocolo
-              </button>
-            )}
-            {protocolo.ativo ? (
-              <button type="button" onClick={() => setModalArquivar(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs font-medium hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all">
-                <Archive size={13} strokeWidth={1.5}/>Arquivar protocolo
-              </button>
-            ) : (
-              <button type="button" onClick={() => setModalReativar(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-50 transition-all">
-                <CheckCircle2 size={13} strokeWidth={1.5}/>Reativar protocolo
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Erro + botões de salvar — modo edição */}
-        {modoEdicao && (
-          <>
-            {erroEdicao && (
-              <div className="flex items-center gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"/>
-                <p className="text-sm text-red-700 font-medium">{erroEdicao}</p>
-              </div>
-            )}
-            <div className="flex gap-3 pt-2 border-t border-slate-50">
-              <button type="button" onClick={() => { setModoEdicao(false); setErroEdicao(''); }}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
-                Cancelar
-              </button>
-              <button type="button" onClick={salvarEdicao} disabled={salvando}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-950 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-all">
-                {salvando ? <><Loader2 size={15} strokeWidth={2} className="animate-spin"/>Salvando…</> : <><Save size={15} strokeWidth={1.5}/>Salvar Alterações</>}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Dias */}
       {modoEdicao ? (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Orientações por Dia ({editDiasArr.length})</h2>
-            <button type="button" onClick={addDia}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-600 font-medium hover:text-slate-950 transition-colors">
-              <Plus size={13} strokeWidth={2}/>Adicionar dia
-            </button>
-          </div>
-          <div className="space-y-2">
-            {editDiasArr.map(dia => (
-              <DiaEdit
-                key={dia.numeroDia}
-                dia={dia}
-                onChange={novo => setEditDiasArr(prev => prev.map(d => d.numeroDia === dia.numeroDia ? novo : d))}
-                onRemove={() => removeDia(dia.numeroDia)}
-              />
-            ))}
-            {editDiasArr.length === 0 && (
-              <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center">
-                <p className="text-slate-400 text-sm font-light">Clique em "Adicionar dia" para começar.</p>
-              </div>
+        <>
+          <header>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Editar protocolo</h1>
+            <p className="mt-1.5 text-sm text-neutral-600">{protocolo.nome} · Versão {versao?.versao ?? 1}</p>
+          </header>
+
+          <InlineAlert tone="neutro">
+            Se você mudar dias ou orientações, será criada a versão {(versao?.versao ?? 0) + 1}.
+            Pacientes já em tratamento continuam com a versão atual; tratamentos novos usam a nova.
+          </InlineAlert>
+
+          <Card title="Informações">
+            <div className="space-y-4">
+              <Field label="Nome">
+                <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} className={inputClass()} />
+              </Field>
+              <Field label="Descrição" opcional>
+                <textarea rows={2} value={editDescricao} onChange={e => setEditDescricao(e.target.value)} className={inputClass(false, { className: 'resize-none' })} />
+              </Field>
+            </div>
+          </Card>
+
+          <Card
+            padded={false}
+            title="Orientações por dia"
+            description={`${editDiasArr.length} dia${editDiasArr.length !== 1 ? 's' : ''}`}
+            actions={
+              <Button variant="secondary" size="sm" onClick={addDia}>
+                <Plus size={15} strokeWidth={2} aria-hidden="true" />
+                Adicionar dia
+              </Button>
+            }
+          >
+            {editDiasArr.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-neutral-600">Clique em “Adicionar dia” para começar.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {editDiasArr.map(dia => (
+                  <DiaEdit
+                    key={dia.numeroDia}
+                    dia={dia}
+                    onChange={novo => setEditDiasArr(prev => prev.map(d => d.numeroDia === dia.numeroDia ? novo : d))}
+                    onRemove={() => removeDia(dia.numeroDia)}
+                  />
+                ))}
+              </ul>
             )}
+          </Card>
+
+          {erroEdicao && <InlineAlert>{erroEdicao}</InlineAlert>}
+
+          <div className="flex flex-col-reverse gap-2 pb-8 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={() => { setModoEdicao(false); setErroEdicao(''); }}>Cancelar</Button>
+            <Button loading={salvando} onClick={salvarEdicao}>{salvando ? 'Salvando…' : 'Salvar alterações'}</Button>
           </div>
-        </section>
-      ) : dias.length === 0 ? (
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-12 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center"><ClipboardList size={22} strokeWidth={1.5} className="text-slate-400"/></div>
-          <p className="text-slate-500 text-sm font-medium">Nenhum dia configurado.</p>
-          {protocolo.ativo && (
-            <button type="button" onClick={entrarEdicao}
-              className="text-xs text-slate-950 font-semibold underline underline-offset-2 hover:text-slate-600 transition-colors">
-              Editar protocolo para adicionar orientações
-            </button>
-          )}
-        </div>
+        </>
       ) : (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Orientações por dia</h2>
-          <div className="space-y-2">{dias.map(dia => <DiaView key={dia.id} dia={dia}/>)}</div>
-        </section>
+        <>
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{protocolo.nome}</h1>
+                <BadgeSituacao ativo={protocolo.ativo} />
+              </div>
+              <p className="mt-1.5 text-sm text-neutral-600 tabular-nums">
+                {protocolo.diasPadrao} dias · {dias.length} configurado{dias.length !== 1 ? 's' : ''}{versao && ` · Versão ${versao.versao}`}
+              </p>
+              {protocolo.descricao && <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink">{protocolo.descricao}</p>}
+            </div>
+            <div className="flex flex-shrink-0 flex-wrap gap-2">
+              {protocolo.ativo ? (
+                <>
+                  <Button variant="secondary" onClick={entrarEdicao}>
+                    <Pencil size={15} strokeWidth={1.75} aria-hidden="true" />
+                    Editar
+                  </Button>
+                  <Button variant="secondary" onClick={() => setModalArquivar(true)} className="hover:border-red-600 hover:text-red-700">
+                    <Archive size={15} strokeWidth={1.75} aria-hidden="true" />
+                    Arquivar
+                  </Button>
+                </>
+              ) : (
+                <Button variant="secondary" onClick={() => setModalReativar(true)}>
+                  <RotateCcw size={15} strokeWidth={1.75} aria-hidden="true" />
+                  Reativar
+                </Button>
+              )}
+            </div>
+          </header>
+
+          <Card padded={false} title="Orientações por dia">
+            {dias.length === 0 ? (
+              <div className="flex flex-col items-start gap-3 px-5 py-8">
+                <p className="text-sm text-neutral-600">Nenhum dia configurado.</p>
+                {protocolo.ativo && <Button variant="secondary" size="sm" onClick={entrarEdicao}>Adicionar orientações</Button>}
+              </div>
+            ) : (
+              <ul className="divide-y divide-line">{dias.map(dia => <DiaView key={dia.id} dia={dia} />)}</ul>
+            )}
+          </Card>
+        </>
       )}
 
-      <ModalConfirmar
+      <ConfirmDialog
         isOpen={modalArquivar}
-        titulo="Arquivar Protocolo"
-        descricao="Ao arquivar, este protocolo não estará disponível para novos tratamentos. Pacientes em andamento não serão afetados."
+        titulo="Arquivar protocolo"
+        descricao="Ao arquivar, este protocolo não fica disponível para novos tratamentos. Pacientes em andamento não são afetados."
         labelConfirmar="Arquivar"
-        corBotao="bg-red-600 hover:bg-red-700"
+        tom="danger"
         onClose={() => setModalArquivar(false)}
         onConfirmar={async () => { await archiveProtocol(id); navigate('/protocols'); }}
       />
 
-      <ModalConfirmar
+      <ConfirmDialog
         isOpen={modalReativar}
-        titulo="Reativar Protocolo"
+        titulo="Reativar protocolo"
         descricao="Este protocolo voltará a ficar disponível para novos tratamentos."
         labelConfirmar="Reativar"
-        corBotao="bg-emerald-600 hover:bg-emerald-700"
         onClose={() => setModalReativar(false)}
         onConfirmar={async () => { await unarchiveProtocol(id); await buscar(); }}
       />
