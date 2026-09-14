@@ -1,6 +1,7 @@
 // Arquivo: backend/src/shared/utils/calculateRecoveryDay.js
 // FIX: Prisma @db.Date retorna meia-noite UTC. No Brasil (UTC-3) getDate() pega o dia anterior.
 // Solução: extrair partes via getUTC* no procedimento.
+// O "hoje" usa o fuso local do Node, que é fixado em America/Sao_Paulo no shared/config/env.js.
 function calculateRecoveryDay(dataProcedimento) {
   if (!dataProcedimento) return 1;
   const agora = new Date();

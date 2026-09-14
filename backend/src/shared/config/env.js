@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+// Fuso da clínica. "Hoje" (dia de recuperação, check-ins de hoje) usa o relógio local do Node,
+// e servidor em nuvem costuma rodar em UTC — sem isso o dia vira às 21h no horário de Brasília.
+process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
+
 const env = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || 'development',
