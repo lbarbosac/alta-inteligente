@@ -1,172 +1,66 @@
 // Arquivo: frontend/src/pages/PatientPortal/Checkin/index.jsx
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  CheckCircle2, Send, Loader2, CalendarDays,
-  ClipboardList, MessageSquare, AlertCircle,
-  Heart, RefreshCw, Clock,
-} from 'lucide-react';
+import { Check, CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import Button from '../../../components/Button';
+import InlineAlert from '../../../components/InlineAlert';
+import { inputClass } from '../../../components/Field';
 import { validateToken, submitCheckin } from '../../../services/patientPortalService';
+import { zonaDor, COR_ZONA, descricaoDor } from '../../../utils/painLevelColor';
 
-function getDorConfig(nivel) {
-  if (!nivel) return { bg: 'bg-slate-100', text: 'text-slate-400', ring: 'ring-slate-200' };
-  if (nivel <= 3) return { bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-300' };
-  if (nivel <= 6) return { bg: 'bg-amber-500',   text: 'text-white', ring: 'ring-amber-300'  };
-  if (nivel <= 8) return { bg: 'bg-orange-500',  text: 'text-white', ring: 'ring-orange-300' };
-  return             { bg: 'bg-red-500',          text: 'text-white', ring: 'ring-red-300'    };
-}
-
-function getDorLabel(nivel) {
-  if (!nivel)     return 'Selecione seu nível de dor';
-  if (nivel <= 3) return 'Ótimo! Dor leve ou sem dor.';
-  if (nivel <= 6) return 'Dor moderada. Siga o protocolo.';
-  if (nivel <= 8) return 'Dor significativa. Fique atento.';
-  return 'Dor intensa. Informe seu profissional.';
+// ─── Estados de tela inteira (link inválido, encerrado, enviado…) ──────────
+function EstadoCentral({ icone: Icone, titulo, destaque = false, acao, children }) {
+  return (
+    <div className="flex flex-col items-center py-12 text-center">
+      <span
+        className={`inline-flex h-14 w-14 items-center justify-center rounded-full
+          ${destaque ? 'bg-ink text-white' : 'border border-line bg-neutral-50 text-neutral-700'}`}
+      >
+        <Icone size={24} strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <h1 className="mt-5 text-2xl font-semibold tracking-tight text-ink">{titulo}</h1>
+      <div className="mt-2 max-w-sm text-base leading-relaxed text-neutral-600">{children}</div>
+      {acao && <div className="mt-8 w-full">{acao}</div>}
+    </div>
+  );
 }
 
 function PortalSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse">
-      <div className="h-6 w-40 bg-slate-200 rounded-lg" />
-      <div className="h-4 w-56 bg-slate-100 rounded" />
-      <div className="h-24 bg-slate-100 rounded-2xl mt-6" />
-      <div className="h-48 bg-slate-100 rounded-2xl" />
-      <div className="h-36 bg-slate-100 rounded-2xl" />
-    </div>
-  );
-}
-
-function LinkInvalido({ mensagem, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-red-50 ring-8 ring-red-100 flex items-center justify-center">
-        <AlertCircle size={28} strokeWidth={1.5} className="text-red-400" />
-      </div>
-      <div>
-        <h2 className="text-slate-700 text-lg font-semibold">Link não disponível</h2>
-        <p className="text-slate-400 text-sm font-light mt-1 max-w-xs leading-relaxed">
-          {mensagem || 'Link inválido ou expirado. Entre em contato com seu profissional de saúde.'}
-        </p>
-      </div>
-      <button type="button" onClick={onRetry}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950
-          text-white text-sm font-medium hover:bg-slate-800 transition-colors">
-        <RefreshCw size={14} strokeWidth={1.5} />
-        Tentar novamente
-      </button>
-    </div>
-  );
-}
-
-function TratamentoEncerrado({ mensagem }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-slate-100 ring-8 ring-slate-50 flex items-center justify-center">
-        <CheckCircle2 size={28} strokeWidth={1.5} className="text-slate-400" />
-      </div>
-      <div>
-        <h2 className="text-slate-700 text-lg font-semibold">Tratamento encerrado</h2>
-        <p className="text-slate-400 text-sm font-light mt-1 max-w-xs leading-relaxed">
-          {mensagem || 'Este tratamento foi concluído pelo seu profissional.'}
-        </p>
-      </div>
-      <div className="w-full bg-white border border-slate-100 rounded-2xl p-5 text-left">
-        <div className="flex items-center gap-2">
-          <Heart size={14} strokeWidth={1.5} className="text-emerald-500" />
-          <p className="text-sm font-medium text-slate-700">Continue cuidando da sua saúde.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AguardandoProtocolo() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center space-y-5">
-      <div className="w-20 h-20 rounded-full bg-amber-50 ring-8 ring-amber-100 flex items-center justify-center">
-        <Clock size={36} strokeWidth={1.5} className="text-amber-400" />
-      </div>
+    <div className="space-y-8" aria-busy="true" aria-label="Carregando">
       <div className="space-y-2">
-        <h2 className="text-slate-950 text-xl font-extrabold">Portal em preparação</h2>
-        <p className="text-slate-500 text-sm font-light leading-relaxed max-w-xs">
-          Olá! Seu portal será ativado assim que seu profissional vincular
-          o seu protocolo de recuperação.
-        </p>
+        <div className="skeleton h-5 w-24" />
+        <div className="skeleton h-8 w-64" />
       </div>
-      <div className="w-full bg-white border border-slate-100 rounded-2xl p-5 text-left space-y-2">
-        <div className="flex items-center gap-2">
-          <Heart size={14} strokeWidth={1.5} className="text-emerald-500" />
-          <p className="text-sm font-medium text-slate-700">Fique tranquilo(a).</p>
-        </div>
-        <p className="text-xs text-slate-400 font-light leading-relaxed">
-          Assim que o protocolo for configurado, você poderá acessar suas
-          orientações diárias e enviar check-ins por aqui.
-        </p>
-      </div>
+      <div className="h-40 animate-pulse rounded-xl bg-neutral-200" />
+      <div className="skeleton h-44 rounded-xl" />
+      <div className="skeleton h-36 rounded-xl" />
     </div>
   );
 }
 
-function CheckinJaFeito({ dia }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-emerald-50 ring-8 ring-emerald-100 flex items-center justify-center">
-        <CheckCircle2 size={28} strokeWidth={1.5} className="text-emerald-500" />
-      </div>
-      <div>
-        <h2 className="text-slate-700 text-lg font-semibold">Check-in já realizado</h2>
-        <p className="text-slate-400 text-sm font-light mt-1 max-w-xs">
-          Você já enviou o check-in do Dia {dia}. Volte amanhã para registrar o próximo.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SuccessState({ nome, dia }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center space-y-5">
-      <div className="w-20 h-20 rounded-full bg-emerald-50 ring-8 ring-emerald-100 flex items-center justify-center">
-        <CheckCircle2 size={36} strokeWidth={1.5} className="text-emerald-500" />
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-slate-950 text-xl font-extrabold">Check-in enviado!</h2>
-        <p className="text-slate-500 text-sm font-light leading-relaxed">
-          Obrigado, {nome?.split(' ')[0]}. Seu relato do Dia {dia} foi registrado com sucesso.
-        </p>
-      </div>
-      <div className="w-full bg-white border border-slate-100 rounded-2xl p-5 text-left space-y-2">
-        <div className="flex items-center gap-2">
-          <Heart size={14} strokeWidth={1.5} className="text-emerald-500" />
-          <p className="text-sm font-medium text-slate-700">Continue seguindo o protocolo amanhã.</p>
-        </div>
-        <p className="text-xs text-slate-400 font-light leading-relaxed">
-          Lembre-se de registrar seu check-in diariamente para que seu profissional
-          acompanhe sua evolução.
-        </p>
-      </div>
-    </div>
-  );
-}
-
+// ─── Formulário do check-in ────────────────────────────────────────────────
 function FormCheckin({ token, dadosPortal, onEnviado }) {
   const [tarefasMarcadas, setTarefasMarcadas] = useState({});
   const [nivelDor,        setNivelDor]        = useState(null);
-  const [observacoes,     setObservacoes]      = useState('');
-  const [enviando,        setEnviando]         = useState(false);
-  const [erroForm,        setErroForm]         = useState('');
+  const [observacoes,     setObservacoes]     = useState('');
+  const [enviando,        setEnviando]        = useState(false);
+  const [erroForm,        setErroForm]        = useState('');
 
   const { paciente, tratamento, recuperacao, tarefasHoje } = dadosPortal;
   const primeiroNome = paciente.nome?.split(' ')[0] ?? 'Paciente';
+  const feitas = Object.values(tarefasMarcadas).filter(Boolean).length;
 
   function toggleTarefa(id) {
     setTarefasMarcadas(prev => ({ ...prev, [id]: !prev[id] }));
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(e) {
+    e.preventDefault();
     setErroForm('');
     if (!nivelDor) {
-      setErroForm('Por favor, informe seu nível de dor antes de enviar.');
+      setErroForm('Escolha um número de 1 a 10 para a sua dor antes de enviar.');
+      document.getElementById('titulo-dor')?.scrollIntoView({ block: 'center' });
       return;
     }
     setEnviando(true);
@@ -183,67 +77,72 @@ function FormCheckin({ token, dadosPortal, onEnviado }) {
       });
       onEnviado();
     } catch (err) {
-      setErroForm(err.response?.data?.message || 'Erro ao enviar check-in. Tente novamente.');
+      setErroForm(err.response?.data?.message || 'Não foi possível enviar o check-in. Tente novamente.');
     } finally {
       setEnviando(false);
     }
   }
 
+  const zona = zonaDor(nivelDor);
+
   return (
-    <div className="space-y-5">
+    <form onSubmit={handleSubmit} noValidate className="space-y-9">
 
-      <div className="space-y-1 pt-2">
-        <p className="text-slate-400 text-sm font-light">Olá, {primeiroNome} 👋</p>
-        <h1 className="text-slate-950 text-2xl font-extrabold tracking-tight">
-          Como você está hoje?
-        </h1>
-        <p className="text-slate-500 text-sm font-light">{tratamento.nomeProcedimento}</p>
-      </div>
+      <header>
+        <p className="text-base text-neutral-600">Olá, {primeiroNome}</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Como você está hoje?</h1>
+      </header>
 
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CalendarDays size={16} strokeWidth={1.5} className="text-slate-400" />
-            <span className="text-slate-600 text-sm font-medium">Dia da Recuperação</span>
-          </div>
-          <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl
-            bg-slate-950 text-white text-sm font-extrabold">
-            D{recuperacao.diaAtual}
-          </span>
-        </div>
-        <div className="space-y-1.5">
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-slate-700 transition-all duration-700"
-              style={{ width: `${recuperacao.progresso}%` }} />
-          </div>
-          <p className="text-slate-400 text-xs font-light text-right">
-            {recuperacao.diaAtual} de {recuperacao.totalDias} dias
+      {/* Dia da recuperação — o único bloco escuro da tela */}
+      <section aria-label="Dia da recuperação" className="on-dark rounded-xl bg-ink p-5 text-white">
+        <p className="text-sm text-neutral-400">{tratamento.nomeProcedimento}</p>
+        <div className="mt-5 flex items-end justify-between gap-4">
+          <p className="flex items-baseline gap-2 leading-none">
+            <span className="text-base text-neutral-400">Dia</span>
+            <span className="text-6xl font-semibold tracking-tight tabular-nums">{recuperacao.diaAtual}</span>
           </p>
+          <p className="pb-1 text-sm text-neutral-400 tabular-nums">de {recuperacao.totalDias} dias</p>
         </div>
-      </div>
+        <div
+          className="mt-5 h-1.5 overflow-hidden rounded-full bg-neutral-800"
+          role="progressbar"
+          aria-label="Progresso da recuperação"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={recuperacao.progresso}
+        >
+          <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${recuperacao.progresso}%` }} />
+        </div>
+      </section>
 
+      {/* Orientações de hoje */}
       {tarefasHoje.length > 0 && (
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50">
-            <ClipboardList size={16} strokeWidth={1.5} className="text-slate-400" />
-            <h2 className="text-slate-800 text-sm font-semibold">Orientações de Hoje</h2>
+        <section aria-labelledby="titulo-orientacoes">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 id="titulo-orientacoes" className="text-lg font-semibold text-ink">Orientações de hoje</h2>
+            <p className="text-sm text-neutral-600 tabular-nums">{feitas} de {tarefasHoje.length}</p>
           </div>
-          <ul className="divide-y divide-slate-50">
+          <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line">
             {tarefasHoje.map(tarefa => {
               const marcada = !!tarefasMarcadas[tarefa.id];
               return (
                 <li key={tarefa.id}>
-                  <button type="button" onClick={() => toggleTarefa(tarefa.id)}
-                    style={{ minHeight: '60px' }}
-                    className="w-full flex items-center gap-4 px-5 py-4 text-left
-                      hover:bg-slate-50/70 active:bg-slate-100 transition-colors">
-                    <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0
-                      flex items-center justify-center transition-all duration-200
-                      ${marcada ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>
-                      {marcada && <CheckCircle2 size={14} strokeWidth={2.5} className="text-white" />}
-                    </div>
-                    <span className={`text-sm leading-snug transition-all
-                      ${marcada ? 'text-slate-400 line-through' : 'text-slate-800 font-medium'}`}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={marcada}
+                    onClick={() => toggleTarefa(tarefa.id)}
+                    className="flex min-h-16 w-full items-center gap-4 px-4 py-3 text-left transition-colors
+                      hover:bg-neutral-50 focus-visible:-outline-offset-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors
+                        ${marcada ? 'border-ink bg-ink text-white' : 'border-line-strong bg-white'}`}
+                    >
+                      {marcada && <Check size={16} strokeWidth={2.5} />}
+                    </span>
+                    <span className={`text-base leading-snug ${marcada ? 'text-neutral-600' : 'text-ink'}`}>
                       {tarefa.descricao}
                     </span>
                   </button>
@@ -251,87 +150,67 @@ function FormCheckin({ token, dadosPortal, onEnviado }) {
               );
             })}
           </ul>
-          <div className="px-5 py-3 bg-slate-50/50 border-t border-slate-50">
-            <p className="text-xs text-slate-400 font-light">
-              {Object.values(tarefasMarcadas).filter(Boolean).length} de {tarefasHoje.length} tarefas concluídas
-            </p>
-          </div>
-        </div>
+        </section>
       )}
 
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-4">
-        <div>
-          <h2 className="text-slate-800 text-sm font-semibold">Nível de Dor Atual</h2>
-          <p className={`text-xs font-medium mt-1 transition-colors duration-200
-            ${nivelDor
-              ? nivelDor <= 3 ? 'text-emerald-600'
-              : nivelDor <= 6 ? 'text-amber-600'
-              : nivelDor <= 8 ? 'text-orange-600'
-              : 'text-red-600'
-              : 'text-slate-400'}`}>
-            {getDorLabel(nivelDor)}
-          </p>
-        </div>
-        <div className="grid grid-cols-5 gap-2">
+      {/* Nível de dor */}
+      <section aria-labelledby="titulo-dor">
+        <h2 id="titulo-dor" className="text-lg font-semibold text-ink">Qual é a sua dor agora?</h2>
+        <p className={`mt-1 min-h-6 text-base ${nivelDor ? COR_ZONA[zona].texto : 'text-neutral-600'}`} aria-live="polite">
+          {descricaoDor(nivelDor)}
+        </p>
+        <div className="mt-4 grid grid-cols-5 gap-2" role="group" aria-labelledby="titulo-dor">
           {Array.from({ length: 10 }, (_, i) => i + 1).map(nivel => {
-            const sel    = nivelDor === nivel;
-            const config = getDorConfig(nivel);
+            const selecionado = nivelDor === nivel;
             return (
-              <button key={nivel} type="button" onClick={() => setNivelDor(nivel)}
-                style={{ minHeight: '52px' }}
-                className={`rounded-xl text-base font-bold transition-all duration-150
-                  active:scale-95 ring-2
-                  ${sel
-                    ? `${config.bg} ${config.text} ${config.ring} scale-105 shadow-md`
-                    : 'bg-slate-50 text-slate-500 ring-slate-100 hover:bg-slate-100'}`}>
+              <button
+                key={nivel}
+                type="button"
+                aria-pressed={selecionado}
+                aria-label={`Dor ${nivel}`}
+                onClick={() => { setNivelDor(nivel); setErroForm(''); }}
+                className={`h-14 rounded-xl text-xl font-semibold tabular-nums transition-colors duration-150
+                  ${selecionado
+                    ? COR_ZONA[zonaDor(nivel)].selecionado
+                    : 'border border-line bg-white text-ink hover:border-neutral-400 hover:bg-neutral-50'}`}
+              >
                 {nivel}
               </button>
             );
           })}
         </div>
-        <div className="flex justify-between text-[10px] text-slate-400 font-medium px-1">
+        <div className="mt-2 flex justify-between text-sm text-neutral-600">
           <span>Sem dor</span>
           <span>Dor máxima</span>
         </div>
+      </section>
+
+      {/* Observações */}
+      <section>
+        <label htmlFor="observacoes" className="block text-lg font-semibold text-ink">
+          Observações <span className="text-base font-normal text-neutral-600">(opcional)</span>
+        </label>
+        <textarea
+          id="observacoes"
+          rows={3}
+          value={observacoes}
+          onChange={e => setObservacoes(e.target.value)}
+          placeholder="Conte como está se sentindo. Ex.: o inchaço diminuiu, mas ainda dói ao abrir a boca."
+          className={inputClass(false, { grande: true, className: 'mt-3 resize-none' })}
+        />
+      </section>
+
+      <div className="space-y-3">
+        {erroForm && <InlineAlert>{erroForm}</InlineAlert>}
+        <Button type="submit" size="xl" loading={enviando} className="w-full">
+          {enviando ? 'Enviando check-in…' : 'Enviar check-in'}
+        </Button>
       </div>
-
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-card p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <MessageSquare size={15} strokeWidth={1.5} className="text-slate-400" />
-          <h2 className="text-slate-800 text-sm font-semibold">
-            Observações <span className="text-slate-400 font-normal">(opcional)</span>
-          </h2>
-        </div>
-        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3}
-          placeholder="Conte como está se sentindo. Ex: 'Inchaço diminuiu, mas ainda sinto dor ao abrir a boca.'"
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50
-            text-sm text-slate-800 placeholder:text-slate-400 font-light outline-none
-            resize-none transition-all focus:border-slate-400 focus:bg-white
-            focus:ring-2 focus:ring-slate-950/5" />
-      </div>
-
-      {erroForm && (
-        <div className="flex items-center gap-2.5 p-4 bg-red-50 border border-red-100 rounded-xl">
-          <AlertCircle size={15} strokeWidth={1.5} className="text-red-500 flex-shrink-0" />
-          <p className="text-red-700 text-sm font-medium">{erroForm}</p>
-        </div>
-      )}
-
-      <button type="button" onClick={handleSubmit} disabled={enviando}
-        style={{ minHeight: '56px' }}
-        className="w-full flex items-center justify-center gap-2.5 rounded-xl
-          bg-slate-950 text-white text-base font-semibold
-          hover:bg-slate-800 active:scale-[0.98]
-          disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150">
-        {enviando
-          ? <><Loader2 size={18} strokeWidth={2} className="animate-spin" /> Enviando check-in…</>
-          : <><Send size={16} strokeWidth={1.5} /> Concluir Check-in</>}
-      </button>
-      <div className="h-4" />
-    </div>
+    </form>
   );
 }
 
+// ─── Página ────────────────────────────────────────────────────────────────
 export default function PatientCheckin() {
   const { token } = useParams();
 
@@ -372,21 +251,55 @@ export default function PatientCheckin() {
   if (loading) return <PortalSkeleton />;
 
   if (enviado && dadosPortal) {
+    const primeiroNome = dadosPortal.paciente.nome?.split(' ')[0];
     return (
-      <SuccessState
-        nome={dadosPortal.paciente.nome}
-        dia={dadosPortal.recuperacao.diaAtual}
-      />
+      <EstadoCentral icone={Check} destaque titulo="Check-in enviado">
+        <p>Obrigado, {primeiroNome}. Seu relato do Dia {dadosPortal.recuperacao.diaAtual} foi registrado.</p>
+        <p className="mt-3">Registre um check-in por dia para que seu profissional acompanhe a sua evolução.</p>
+      </EstadoCentral>
     );
   }
 
-  if (statusPortal === 'invalido')       return <LinkInvalido mensagem={mensagem} onRetry={carregarPortal} />;
-  if (statusPortal === 'encerrado')      return <TratamentoEncerrado mensagem={mensagem} />;
-  if (statusPortal === 'sem_tratamento') return <AguardandoProtocolo />;
+  if (statusPortal === 'invalido') {
+    return (
+      <EstadoCentral
+        icone={AlertCircle}
+        titulo="Link não disponível"
+        acao={
+          <Button variant="secondary" size="lg" onClick={carregarPortal} className="w-full">
+            <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
+            Tentar novamente
+          </Button>
+        }
+      >
+        {mensagem || 'Link inválido ou expirado. Entre em contato com seu profissional de saúde.'}
+      </EstadoCentral>
+    );
+  }
+
+  if (statusPortal === 'encerrado') {
+    return (
+      <EstadoCentral icone={CheckCircle2} titulo="Tratamento encerrado">
+        {mensagem || 'Este tratamento foi concluído pelo seu profissional.'}
+      </EstadoCentral>
+    );
+  }
+
+  if (statusPortal === 'sem_tratamento') {
+    return (
+      <EstadoCentral icone={Clock} titulo="Portal em preparação">
+        Seu portal será ativado assim que seu profissional vincular o seu protocolo de recuperação.
+      </EstadoCentral>
+    );
+  }
 
   if (statusPortal === 'ativo' && dadosPortal) {
     if (dadosPortal.checkinHojeFeito) {
-      return <CheckinJaFeito dia={dadosPortal.recuperacao.diaAtual} />;
+      return (
+        <EstadoCentral icone={Check} destaque titulo="Check-in de hoje enviado">
+          Você já enviou o check-in do Dia {dadosPortal.recuperacao.diaAtual}. Volte amanhã para registrar o próximo.
+        </EstadoCentral>
+      );
     }
     return <FormCheckin token={token} dadosPortal={dadosPortal} onEnviado={() => setEnviado(true)} />;
   }
