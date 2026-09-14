@@ -22,21 +22,18 @@ const respostaSchema = z.object({
  * createSchema — campos obrigatórios para envio do check-in diário.
  *
  * Notas:
+ *  - `token`: o tokenPaciente do link seguro. É ele que identifica o
+ *    tratamento — o id do tratamento nunca é aceito do cliente.
+ *  - `diaRecuperacao` e `enviadoEm`: definidos pelo servidor — nunca pelo cliente.
  *  - `nivelDor`: obrigatório no banco (TinyInt). Escala 1–10 conforme
  *    doc 02-regras-negocio.md seção 15.
- *  - `enviadoEm`: definido pelo servidor (new Date()) — nunca pelo cliente.
  *  - `observacoes`: campo livre e opcional.
  *  - `respostas`: array opcional — o paciente pode enviar sem marcar tarefas.
  */
 const createSchema = z.object({
-  tratamentoId: z
+  token: z
     .string()
-    .uuid('ID de tratamento inválido.'),
-
-  diaRecuperacao: z
-    .number()
-    .int()
-    .positive('Dia de recuperação deve ser um inteiro positivo.'),
+    .regex(/^[a-f0-9]{64}$/, 'Link inválido.'),
 
   nivelDor: z
     .number()

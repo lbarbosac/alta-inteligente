@@ -149,7 +149,7 @@ function SuccessState({ nome, dia }) {
   );
 }
 
-function FormCheckin({ dadosPortal, onEnviado }) {
+function FormCheckin({ token, dadosPortal, onEnviado }) {
   const [tarefasMarcadas, setTarefasMarcadas] = useState({});
   const [nivelDor,        setNivelDor]        = useState(null);
   const [observacoes,     setObservacoes]      = useState('');
@@ -176,8 +176,7 @@ function FormCheckin({ dadosPortal, onEnviado }) {
         concluido: !!tarefasMarcadas[tarefa.id],
       }));
       await submitCheckin({
-        tratamentoId:   tratamento.id,
-        diaRecuperacao: recuperacao.diaAtual,
+        token,
         nivelDor,
         observacoes:    observacoes || null,
         respostas,
@@ -389,7 +388,7 @@ export default function PatientCheckin() {
     if (dadosPortal.checkinHojeFeito) {
       return <CheckinJaFeito dia={dadosPortal.recuperacao.diaAtual} />;
     }
-    return <FormCheckin dadosPortal={dadosPortal} onEnviado={() => setEnviado(true)} />;
+    return <FormCheckin token={token} dadosPortal={dadosPortal} onEnviado={() => setEnviado(true)} />;
   }
 
   return null;
