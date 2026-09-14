@@ -33,6 +33,12 @@ async function createTreatment(dados, profissionalId) {
       'Protocolo não encontrado ou sem versão cadastrada. Crie os dias e tarefas do protocolo antes de vinculá-lo.'
     );
   }
+  if (versao.protocolo.profissionalId !== profissionalId) {
+    throw new ForbiddenError('Acesso negado. Este protocolo não pertence ao seu cadastro.');
+  }
+  if (!versao.protocolo.ativo) {
+    throw new ValidationError('Este protocolo está arquivado. Reative-o antes de vincular a um tratamento.');
+  }
 
   const tokenPaciente = generateSecureToken();
 

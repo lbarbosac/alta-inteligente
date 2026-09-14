@@ -61,7 +61,12 @@ async function findLatestProtocolVersion(protocoloId) {
   return prisma.versaoProtocolo.findFirst({
     where: { protocoloId },
     orderBy: { versao: 'desc' },
-    select: { id: true, versao: true, totalDias: true },
+    select: {
+      id: true,
+      versao: true,
+      totalDias: true,
+      protocolo: { select: { profissionalId: true, ativo: true } },
+    },
   });
 }
 

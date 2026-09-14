@@ -33,7 +33,25 @@ const createSchema = z.object({
     .date({ message: 'Data do procedimento inválida. Use o formato AAAA-MM-DD.' }),
 });
 
-// ─── Middleware ────────────────────────────────────────────────────────────
+/**
+ * updateSchema — PATCH /treatments/:id. Só nome do procedimento e status.
+ * Sem isso, um status fora do enum chegava no Prisma e virava erro 500.
+ */
+const updateSchema = z.object({
+  nomeProcedimento: z
+    .string()
+    .trim()
+    .min(2, 'Nome do procedimento deve ter ao menos 2 caracteres.')
+    .optional(),
+
+  status: z
+    .enum(['ativo', 'finalizado', 'cancelado'], {
+      message: "Status inválido. Use 'ativo', 'finalizado' ou 'cancelado'.",
+    })
+    .optional(),
+});
+
+// ─── Middlewares ───────────────────────────────────────────────────────────
 
 function validateCreate(req, res, next) {
   const resultado = createSchema.safeParse(req.body);
@@ -42,4 +60,11 @@ function validateCreate(req, res, next) {
   next();
 }
 
-module.exports = { validateCreate };
+function validateUpdate(req, res, next) {
+  const resultado = updateSchema.safeParse(req.body);
+  if (!resultado.success) return next(resultado.error);
+  req.body = resultado.data;
+  next();
+}
+
+module.exports = { validateCreate, validateUpdate };

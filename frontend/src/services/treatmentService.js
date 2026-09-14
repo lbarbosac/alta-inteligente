@@ -17,7 +17,7 @@ export async function createTreatment(dados) {
 }
 
 export async function updateTreatment(id, dados) {
-  // Alterado de patch para put (ou mantenha patch se o backend usar router.patch)
-  const response = await api.put(`/treatments/${id}`, dados);
+  // O backend usa router.patch — com put a requisição caía em 404
+  const response = await api.patch(`/treatments/${id}`, dados);
   return response.data.data;
 }
