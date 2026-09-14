@@ -1,79 +1,38 @@
 // Arquivo: src/pages/Settings/index.jsx
-import { Settings as SettingsIcon, Bell, Lock, Globe } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import PageHeader from '../../components/PageHeader';
+import Card from '../../components/Card';
+import InlineAlert from '../../components/InlineAlert';
 
-function SettingRow({ icon: Icon, title, description, children }) {
-  return (
-    <div className="flex items-start justify-between gap-6 py-5 border-b border-slate-50 last:border-0">
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Icon size={16} strokeWidth={1.5} className="text-slate-500" />
-        </div>
-        <div>
-          <p className="text-slate-900 text-sm font-medium">{title}</p>
-          <p className="text-slate-400 text-xs font-light mt-0.5">{description}</p>
-        </div>
-      </div>
-      <div className="flex-shrink-0">{children}</div>
-    </div>
-  );
-}
-
+// Os interruptores e o botão "Alterar" de antes não faziam nada — saíram até a função existir.
 export default function Settings() {
   const { usuario } = useAuth();
 
+  const dados = [
+    { termo: 'Nome',          valor: usuario?.nome },
+    { termo: 'E-mail',        valor: usuario?.email },
+    { termo: 'Especialidade', valor: usuario?.especialidade },
+    { termo: 'Perfil',        valor: usuario?.role === 'admin' ? 'Administrador' : 'Profissional' },
+  ].filter(d => d.valor);
+
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-slate-950 text-2xl font-extrabold tracking-tight">
-          Configurações
-        </h1>
-        <p className="text-slate-400 text-sm font-light mt-1">
-          Gerencie suas preferências e dados da conta.
-        </p>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader title="Configurações" description="Dados da sua conta na plataforma." />
 
-      <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-50">
-          <h2 className="text-slate-950 text-sm font-semibold">Dados da Conta</h2>
-        </div>
-        <div className="px-6">
-          <SettingRow icon={SettingsIcon} title="Nome" description="Seu nome exibido na plataforma">
-            <span className="text-slate-600 text-sm font-medium">{usuario?.nome ?? '—'}</span>
-          </SettingRow>
-          <SettingRow icon={Globe} title="E-mail" description="Endereço de login">
-            <span className="text-slate-600 text-sm font-medium">{usuario?.email ?? '—'}</span>
-          </SettingRow>
-          <SettingRow icon={Lock} title="Senha" description="Altere sua senha de acesso">
-            <button type="button"
-              className="text-sm text-slate-950 font-semibold underline underline-offset-2 hover:text-slate-600 transition-colors">
-              Alterar
-            </button>
-          </SettingRow>
-        </div>
-      </section>
-
-      <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-50">
-          <h2 className="text-slate-950 text-sm font-semibold">Notificações</h2>
-        </div>
-        <div className="px-6">
-          <SettingRow icon={Bell} title="Alertas críticos" description="Pacientes com dor ≥ 8">
-            <div className="w-10 h-6 rounded-full bg-slate-950 flex items-center px-1 cursor-pointer">
-              <div className="w-4 h-4 rounded-full bg-white shadow-sm translate-x-4" />
+      <Card title="Conta">
+        <dl className="divide-y divide-line">
+          {dados.map(({ termo, valor }) => (
+            <div key={termo} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-sm text-neutral-500">{termo}</dt>
+              <dd className="break-all text-sm text-ink sm:text-right">{valor}</dd>
             </div>
-          </SettingRow>
-          <SettingRow icon={Bell} title="Check-ins recebidos" description="Notificação ao receber check-in">
-            <div className="w-10 h-6 rounded-full bg-slate-200 flex items-center px-1 cursor-pointer">
-              <div className="w-4 h-4 rounded-full bg-white shadow-sm translate-x-0" />
-            </div>
-          </SettingRow>
-        </div>
-      </section>
+          ))}
+        </dl>
+      </Card>
 
-      <p className="text-slate-300 text-xs font-light text-center">
-        Edição de dados disponível em versão futura.
-      </p>
+      <InlineAlert tone="neutro">
+        Edição de dados, troca de senha e notificações chegam em uma próxima versão.
+      </InlineAlert>
     </div>
   );
 }
