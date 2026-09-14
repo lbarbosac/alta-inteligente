@@ -1,105 +1,83 @@
 // Arquivo: src/components/Sidebar/index.jsx
-import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  Settings,
-  Activity,
-} from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
+import Brand from '../Brand';
+import Avatar from '../Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 
-// ─── Itens de navegação ────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard',      icon: LayoutDashboard },
-  { to: '/patients',  label: 'Pacientes',      icon: Users },
-  { to: '/protocols', label: 'Protocolos',     icon: ClipboardList },
-  { to: '/settings',  label: 'Configurações',  icon: Settings },
-];
-
-// ─── Utilitário de iniciais ────────────────────────────────────────────────
-function getInitials(nome) {
-  if (!nome) return '?';
-  const partes = nome.trim().split(' ').filter(Boolean);
-  if (partes.length === 1) return partes[0][0].toUpperCase();
-  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+function ItemMenu({ to, label, icon: Icon, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-150
+         ${isActive ? 'bg-ink text-white' : 'text-neutral-600 hover:bg-neutral-100 hover:text-ink'}`
+      }
+    >
+      <Icon size={18} strokeWidth={1.75} className="flex-shrink-0" aria-hidden="true" />
+      <span>{label}</span>
+    </NavLink>
+  );
 }
 
-// ─── Componente ────────────────────────────────────────────────────────────
-export default function Sidebar() {
-  const { usuario } = useAuth();
+/**
+ * Conteúdo do menu (marca, itens, usuário). Usado na barra lateral do desktop
+ * e na gaveta do celular (components/Navbar).
+ */
+export function ConteudoMenu({ items, perfil, acaoTopo }) {
+  const { usuario, logout } = useAuth();
+  const navigate = useNavigate();
+
+  function sair() {
+    logout();
+    navigate('/login', { replace: true });
+  }
 
   return (
-    <aside className="hidden lg:flex flex-col w-60 min-h-screen bg-slate-950 sticky top-0 h-screen flex-shrink-0">
-
-      {/* ── Logo ─────────────────────────────────────────────────────── */}
-      <div className="px-6 py-7 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
-            <Activity size={14} strokeWidth={2} className="text-white" />
-          </div>
-          <div>
-            <p className="text-white text-sm font-semibold leading-none tracking-tight">
-              Alta
-            </p>
-            <p className="text-white/40 text-[10px] font-light tracking-widest uppercase leading-none mt-0.5">
-              Inteligente
-            </p>
-          </div>
+    <div className="flex h-full flex-col">
+      <div className="flex h-16 flex-shrink-0 items-center justify-between gap-2 px-5">
+        <div className="flex items-center gap-2">
+          <Brand />
+          {perfil && (
+            <span className="rounded-full border border-line px-2 py-0.5 text-xs font-medium text-neutral-600">{perfil}</span>
+          )}
         </div>
+        {acaoTopo}
       </div>
 
-      {/* ── Navegação ────────────────────────────────────────────────── */}
-      <nav className="flex-1 px-3 py-5 space-y-0.5" aria-label="Navegação principal">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-               transition-all duration-150 group
-               ${isActive
-                 ? 'bg-white/10 text-white'
-                 : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-               }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  size={17}
-                  strokeWidth={1.5}
-                  className={`flex-shrink-0 transition-colors duration-150
-                    ${isActive ? 'text-white' : 'text-white/40 group-hover:text-white/70'}`}
-                />
-                <span>{label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
+      <nav aria-label="Navegação principal" className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
+        {items.map((item) => <ItemMenu key={item.to} {...item} />)}
       </nav>
 
-      {/* ── Perfil do usuário ─────────────────────────────────────────── */}
-      <div className="px-3 py-4 border-t border-white/5">
-        <div className="flex items-center gap-3 px-3 py-2">
-          {/* Avatar com iniciais */}
-          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-semibold">
-              {getInitials(usuario?.nome)}
-            </span>
+      <div className="flex-shrink-0 border-t border-line p-3">
+        <div className="flex items-center gap-3 px-2 py-1.5">
+          <Avatar nome={usuario?.nome} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-ink">{usuario?.nome ?? '—'}</p>
+            <p className="truncate text-xs text-neutral-500">{usuario?.especialidade ?? perfil ?? 'Profissional'}</p>
           </div>
-          {/* Nome e especialidade */}
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-medium truncate leading-none">
-              {usuario?.nome ?? '—'}
-            </p>
-            <p className="text-white/30 text-[10px] font-light mt-0.5 truncate">
-              {usuario?.especialidade ?? 'Profissional'}
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={sair}
+            aria-label="Sair da plataforma"
+            title="Sair"
+            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-neutral-600
+              transition-colors hover:bg-neutral-100 hover:text-ink"
+          >
+            <LogOut size={17} strokeWidth={1.75} />
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
 
+/** Barra lateral fixa do desktop. No celular quem aparece é o Navbar. */
+export default function Sidebar({ items, perfil }) {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 border-r border-line bg-white lg:block">
+      <ConteudoMenu items={items} perfil={perfil} />
     </aside>
   );
 }

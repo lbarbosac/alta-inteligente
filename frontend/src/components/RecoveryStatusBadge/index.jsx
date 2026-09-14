@@ -1,64 +1,31 @@
 // Arquivo: src/components/RecoveryStatusBadge/index.jsx
 
 /**
- * Mapeamento completo de status clínicos.
- * Baseado em doc 02-regras-negocio.md seção 15 e frontend-spec.md.
+ * Status clínico (calculado a partir do último check-in) e estados do tratamento.
+ * Cor só em atenção e crítico — specs/design.md §2. O rótulo sempre acompanha a cor.
  *
- * recuperacao  → dor 1–3    → verde menta
- * estabilizacao→ dor 4–6    → âmbar clínico
- * atencao      → dor 7–8    → laranja
- * critico      → dor 9–10   → carmesim
- * sem_checkin  → sem dados  → slate neutro
+ * recuperacao   → dor 1–3
+ * estabilizacao → dor 4–6
+ * atencao       → dor 7–8 ou mais de 48h sem check-in
+ * critico       → dor 9–10
  */
 const STATUS_MAP = {
-  recuperacao: {
-    label: 'Recuperação',
-    dot:   'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  },
-  estabilizacao: {
-    label: 'Estabilização',
-    dot:   'bg-amber-500',
-    badge: 'bg-amber-50 text-amber-700 ring-amber-100',
-  },
-  atencao: {
-    label: 'Atenção',
-    dot:   'bg-orange-500',
-    badge: 'bg-orange-50 text-orange-700 ring-orange-100',
-  },
-  critico: {
-    label: 'Crítico',
-    dot:   'bg-red-500',
-    badge: 'bg-red-50 text-red-700 ring-red-100',
-  },
-  sem_checkin: {
-    label: 'Sem check-in',
-    dot:   'bg-slate-400',
-    badge: 'bg-slate-50 text-slate-500 ring-slate-100',
-  },
+  recuperacao:    { label: 'Recuperação',    ponto: 'bg-ink',                                 badge: 'border-line bg-white text-ink' },
+  estabilizacao:  { label: 'Estabilização',  ponto: 'bg-neutral-400',                         badge: 'border-line bg-white text-neutral-700' },
+  atencao:        { label: 'Atenção',        ponto: 'bg-amber-500',                           badge: 'border-amber-200 bg-amber-50 text-amber-800' },
+  critico:        { label: 'Crítico',        ponto: 'bg-red-600',                             badge: 'border-red-200 bg-red-50 text-red-700' },
+  sem_checkin:    { label: 'Sem check-in',   ponto: 'bg-white ring-1 ring-inset ring-neutral-400', badge: 'border-line bg-white text-neutral-600' },
+  sem_tratamento: { label: 'Sem tratamento', ponto: 'bg-white ring-1 ring-inset ring-neutral-400', badge: 'border-line bg-white text-neutral-600' },
+  encerrado:      { label: 'Encerrado',      ponto: 'bg-neutral-300',                         badge: 'border-line bg-neutral-50 text-neutral-600' },
 };
 
-/**
- * Badge visual de status clínico do paciente.
- *
- * @param {'recuperacao'|'estabilizacao'|'atencao'|'critico'|'sem_checkin'} status
- * @param {'sm'|'md'} [size='md'] - Tamanho do badge
- */
 export default function RecoveryStatusBadge({ status, size = 'md' }) {
   const config = STATUS_MAP[status] ?? STATUS_MAP.sem_checkin;
-
-  const sizeClass = size === 'sm'
-    ? 'px-2 py-0.5 text-[10px] gap-1'
-    : 'px-2.5 py-1 text-xs gap-1.5';
+  const tamanho = size === 'sm' ? 'h-6 px-2 text-xs gap-1.5' : 'h-7 px-2.5 text-xs gap-2';
 
   return (
-    <span
-      className={`inline-flex items-center rounded-full font-medium ring-1
-        ${config.badge} ${sizeClass}`}
-    >
-      <span className={`rounded-full flex-shrink-0 ${config.dot}
-        ${size === 'sm' ? 'w-1 h-1' : 'w-1.5 h-1.5'}`}
-      />
+    <span className={`inline-flex flex-shrink-0 items-center whitespace-nowrap rounded-full border font-medium ${tamanho} ${config.badge}`}>
+      <span className={`h-2 w-2 flex-shrink-0 rounded-full ${config.ponto}`} aria-hidden="true" />
       {config.label}
     </span>
   );

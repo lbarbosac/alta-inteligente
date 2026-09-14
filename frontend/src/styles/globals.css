@@ -1,6 +1,4 @@
 /* Arquivo: src/styles/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,15 +11,33 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 font-sans;
+    @apply bg-white text-ink font-sans;
   }
 
-  /* Remove autofill background amarelo do browser */
+  /* Foco visível em tudo. Sobre fundo escuro, o anel fica branco (classe .on-dark no container). */
+  :focus-visible {
+    outline: 2px solid theme('colors.ink');
+    outline-offset: 2px;
+  }
+  .on-dark :focus-visible {
+    outline-color: theme('colors.white');
+  }
+
+  /* Remove o fundo amarelo do autofill do navegador */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
     -webkit-box-shadow: 0 0 0 1000px white inset;
     transition: background-color 5000s ease-in-out 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -30,8 +46,8 @@
     text-wrap: balance;
   }
 
-  /* Skeleton pulse animation */
+  /* Skeleton de carregamento */
   .skeleton {
-    @apply animate-pulse bg-slate-100 rounded;
+    @apply animate-pulse bg-neutral-200/70 rounded-md;
   }
 }
