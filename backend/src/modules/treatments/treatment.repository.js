@@ -30,6 +30,12 @@ const INCLUDE_PADRAO = {
       enviadoEm: true,
     },
   },
+  // Último aceite do termo: o profissional vê se o paciente aceitou e se quer lembretes
+  consentimentos: {
+    orderBy: { aceitoEm: 'desc' },
+    take: 1,
+    select: { versaoTermo: true, aceitaLembretes: true, aceitoEm: true },
+  },
 };
 
 async function create(data) {

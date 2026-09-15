@@ -5,9 +5,9 @@ const { ApiResponse } = require('../../shared/utils/ApiResponse');
 /**
  * GET /api/v1/patient/access/:token
  *
- * O service agora retorna sempre um objeto com `status`.
+ * O service retorna sempre um objeto com `status`:
+ * 'invalido' | 'encerrado' | 'consentimento_pendente' | 'ativo'.
  * O frontend usa esse campo para decidir qual tela renderizar.
- * Nunca retorna 404 para o portal — apenas um status amigável.
  */
 async function access(req, res) {
   const { token } = req.params;
@@ -15,4 +15,13 @@ async function access(req, res) {
   return ApiResponse.success(res, dados, 'Portal consultado.');
 }
 
-module.exports = { access };
+/**
+ * POST /api/v1/patient/access/:token/consentimento
+ * Body: { aceitaLembretes: boolean }
+ */
+async function consent(req, res) {
+  const consentimento = await service.registrarConsentimento(req.params.token, req.body, req);
+  return ApiResponse.created(res, consentimento, 'Termo aceito.');
+}
+
+module.exports = { access, consent };

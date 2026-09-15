@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const rateLimit  = require('express-rate-limit');
 const controller = require('./patientPortal.controller');
+const { validateConsentimento } = require('./patientPortal.validation');
 
 const router = Router();
 
@@ -31,5 +32,11 @@ const portalLimiter = rateLimit({
  * ao tratamento do paciente."
  */
 router.get('/access/:token', portalLimiter, controller.access);
+
+/**
+ * POST /api/v1/patient/access/:token/consentimento
+ * Aceite do termo de privacidade (LGPD) antes do primeiro check-in.
+ */
+router.post('/access/:token/consentimento', portalLimiter, validateConsentimento, controller.consent);
 
 module.exports = router;

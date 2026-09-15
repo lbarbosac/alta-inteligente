@@ -2,7 +2,7 @@
 const { prisma } = require('../../shared/config/prismaClient');
 
 async function create(data) {
-  const { respostas, ...dadosCheckin } = data;
+  const { respostas, fotos, ...dadosCheckin } = data;
   return prisma.checkin.create({
     data: {
       ...dadosCheckin,
@@ -13,8 +13,11 @@ async function create(data) {
           concluidoEm:          r.concluido ? new Date() : null,
         })),
       },
+      fotos: {
+        create: (fotos ?? []).map(f => ({ arquivo: f.arquivo, tamanhoBytes: f.tamanhoBytes })),
+      },
     },
-    include: { respostas: true },
+    select: { id: true },
   });
 }
 
@@ -41,7 +44,7 @@ async function findByTreatmentId(tratamentoId) {
   const checkins = await prisma.checkin.findMany({
     where:   { tratamentoId },
     orderBy: { diaRecuperacao: 'asc' },
-    include: { respostas: true },
+    include: { respostas: true, fotos: { select: { id: true }, orderBy: { criadoEm: 'asc' } } },
   });
 
   // Busca descrições das tarefas em paralelo para cada resposta única

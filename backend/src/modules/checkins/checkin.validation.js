@@ -16,6 +16,13 @@ const respostaSchema = z.object({
     .boolean({ message: 'O campo concluido deve ser verdadeiro ou falso.' }),
 });
 
+// Com fotos o check-in chega em multipart/form-data: todo campo vem como texto.
+// `respostas` vem como JSON em texto e `nivelDor` como "7".
+function lerJson(valor) {
+  if (typeof valor !== 'string') return valor;
+  try { return JSON.parse(valor); } catch { return valor; }
+}
+
 // ─── Schema principal ──────────────────────────────────────────────────────
 
 /**
@@ -29,13 +36,14 @@ const respostaSchema = z.object({
  *    doc 02-regras-negocio.md seção 15.
  *  - `observacoes`: campo livre e opcional.
  *  - `respostas`: array opcional — o paciente pode enviar sem marcar tarefas.
+ *  - fotos: chegam em req.files (multer), até 3, validadas no service.
  */
 const createSchema = z.object({
   token: z
     .string()
     .regex(/^[a-f0-9]{64}$/, 'Link inválido.'),
 
-  nivelDor: z
+  nivelDor: z.coerce
     .number()
     .int()
     .min(1,  'Nível de dor mínimo é 1.')
@@ -43,13 +51,15 @@ const createSchema = z.object({
 
   observacoes: z
     .string()
+    .max(2000, 'Observações podem ter até 2000 caracteres.')
+    .transform((texto) => texto.trim() || null)
     .optional()
     .nullable(),
 
-  respostas: z
-    .array(respostaSchema)
-    .optional()
-    .default([]),
+  respostas: z.preprocess(
+    lerJson,
+    z.array(respostaSchema).optional().default([])
+  ),
 });
 
 // ─── Middleware ────────────────────────────────────────────────────────────

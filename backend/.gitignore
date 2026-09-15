@@ -6,6 +6,9 @@ node_modules/
 .env.*
 !.env.example
 
+# Fotos dos check-ins (dados de saúde — nunca no git)
+/storage/
+
 # Prisma
 /generated/prisma
 prisma/dev.db
