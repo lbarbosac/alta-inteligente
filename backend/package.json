@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,9 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.10",
+    "sharp": "^0.35.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
