@@ -2,7 +2,7 @@ const { Router } = require('express');
 
 const { authMiddleware } = require('../../shared/middlewares/authMiddleware');
 const { roleMiddleware }  = require('../../shared/middlewares/roleMiddleware');
-const { validateCreate, validateUpdate } = require('./patient.validation');
+const { validateCreate, validateUpdate, validateAnonimizar } = require('./patient.validation');
 const controller = require('./patient.controller');
 
 const router = Router();
@@ -43,5 +43,17 @@ router.get('/:id', controller.getById);
  * Retorna 403 se o paciente pertencer a outro profissional.
  */
 router.put('/:id', validateUpdate, controller.update);
+
+/**
+ * GET /api/v1/patients/:id/exportar
+ * Baixa todos os dados do paciente em JSON (pedido de acesso/portabilidade — LGPD).
+ */
+router.get('/:id/exportar', controller.exportar);
+
+/**
+ * POST /api/v1/patients/:id/anonimizar
+ * Remove os dados pessoais do paciente. Irreversível.
+ */
+router.post('/:id/anonimizar', validateAnonimizar, controller.anonimizar);
 
 module.exports = router;
