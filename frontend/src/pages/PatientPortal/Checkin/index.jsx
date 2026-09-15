@@ -1,12 +1,15 @@
 // Arquivo: frontend/src/pages/PatientPortal/Checkin/index.jsx
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Check, CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Check, CheckCircle2, AlertCircle, Clock, RefreshCw, Camera, X, ShieldCheck } from 'lucide-react';
 import Button from '../../../components/Button';
 import InlineAlert from '../../../components/InlineAlert';
 import { inputClass } from '../../../components/Field';
-import { validateToken, submitCheckin } from '../../../services/patientPortalService';
+import { validateToken, submitCheckin, registrarConsentimento } from '../../../services/patientPortalService';
 import { zonaDor, COR_ZONA, descricaoDor } from '../../../utils/painLevelColor';
+import { comprimirFoto } from '../../../utils/comprimirFoto';
+
+const LIMITE_FOTOS = 3;
 
 // ─── Estados de tela inteira (link inválido, encerrado, enviado…) ──────────
 function EstadoCentral({ icone: Icone, titulo, destaque = false, acao, children }) {
@@ -39,11 +42,195 @@ function PortalSkeleton() {
   );
 }
 
+// ─── Termo de consentimento (LGPD) ─────────────────────────────────────────
+// Aparece no primeiro acesso ao link, antes de qualquer dado de saúde ser enviado.
+// Os dois aceites são separados: o termo é obrigatório; o lembrete é escolha livre e começa desmarcado.
+function TermoConsentimento({ token, dados, onAceito }) {
+  const [concordo, setConcordo] = useState(false);
+  const [lembretes, setLembretes] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const profissional = dados.profissional?.nome ?? 'seu profissional de saúde';
+
+  async function continuar(e) {
+    e.preventDefault();
+    if (!concordo) { setErro('Para continuar, marque que leu e concorda.'); return; }
+    setEnviando(true);
+    setErro('');
+    try {
+      await registrarConsentimento(token, lembretes);
+      onAceito();
+    } catch (err) {
+      setErro(err.response?.data?.message || 'Não foi possível registrar. Tente novamente.');
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={continuar} noValidate className="space-y-8">
+      <header>
+        <p className="text-base text-neutral-600">Olá, {dados.paciente?.nome}</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Antes de começar</h1>
+      </header>
+
+      <section className="space-y-4 text-base leading-relaxed text-ink">
+        <p>
+          Por aqui você conta todos os dias como está a sua recuperação.
+          Quem recebe essas informações é <strong>{profissional}</strong>.
+        </p>
+        <ul className="space-y-3">
+          {[
+            'Seu nível de dor, as orientações que você cumpriu e o que escrever.',
+            'Fotos da região tratada, se você quiser enviar.',
+          ].map((item) => (
+            <li key={item} className="flex gap-3">
+              <Check size={20} strokeWidth={2} className="mt-0.5 flex-shrink-0 text-ink" aria-hidden="true" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-3 rounded-xl border border-line bg-neutral-50 p-4 text-sm text-neutral-700">
+          <ShieldCheck size={20} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
+          <p>
+            São dados de saúde, protegidos pela LGPD. Só o seu profissional vê, e eles servem apenas para o seu
+            acompanhamento. Você pode pedir a ele para ver, corrigir ou apagar seus dados.
+          </p>
+        </div>
+      </section>
+
+      <fieldset className="space-y-4">
+        <legend className="sr-only">Autorizações</legend>
+        <label className="flex cursor-pointer items-start gap-3 text-base text-ink">
+          <input type="checkbox" checked={concordo} onChange={(e) => { setConcordo(e.target.checked); setErro(''); }} className="mt-0.5 h-6 w-6 flex-shrink-0 cursor-pointer accent-ink" />
+          <span>
+            Li e concordo com a{' '}
+            <Link to="/privacidade" target="_blank" className="font-medium underline underline-offset-2">Política de Privacidade</Link>.
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 text-base text-ink">
+          <input type="checkbox" checked={lembretes} onChange={(e) => setLembretes(e.target.checked)} className="mt-0.5 h-6 w-6 flex-shrink-0 cursor-pointer accent-ink" />
+          <span>
+            Quero receber um lembrete pelo WhatsApp quando esquecer o check-in do dia.
+            <span className="block text-sm text-neutral-600">Opcional. Você pode desligar quando quiser, nesta mesma página.</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <div className="space-y-3">
+        {erro && <InlineAlert>{erro}</InlineAlert>}
+        <Button type="submit" size="xl" loading={enviando} className="w-full">
+          {enviando ? 'Registrando…' : 'Continuar'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Ligar ou desligar lembretes ───────────────────────────────────────────
+// Retirar o consentimento tem que ser tão fácil quanto dar (LGPD art. 8º, §5º).
+// Cada mudança vira um novo registro de consentimento, com data.
+function PreferenciaLembrete({ token, aceita, onMudou }) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function alternar() {
+    setSalvando(true);
+    setErro('');
+    try {
+      await registrarConsentimento(token, !aceita);
+      onMudou(!aceita);
+    } catch {
+      setErro('Não foi possível alterar agora. Tente de novo.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="mt-10 border-t border-line pt-5 text-sm text-neutral-600">
+      <p>
+        Lembrete diário pelo WhatsApp: <strong className="font-medium text-ink">{aceita ? 'ligado' : 'desligado'}</strong>.{' '}
+        <button type="button" onClick={alternar} disabled={salvando} className="font-medium text-ink underline underline-offset-2 disabled:opacity-50">
+          {salvando ? 'Salvando…' : aceita ? 'Desligar' : 'Ligar'}
+        </button>
+      </p>
+      {erro && <p className="mt-1 text-red-700" role="alert">{erro}</p>}
+    </div>
+  );
+}
+
+// ─── Fotos opcionais do check-in ───────────────────────────────────────────
+function SeletorFotos({ fotos, onChange }) {
+  const inputRef = useRef(null);
+  const [preparando, setPreparando] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const [previas, setPrevias] = useState([]);
+
+  // Pré-visualização a partir dos arquivos já reduzidos; libera a memória ao trocar
+  useEffect(() => {
+    const urls = fotos.map((f) => URL.createObjectURL(f));
+    setPrevias(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [fotos]);
+
+  async function adicionar(e) {
+    const escolhidos = [...e.target.files].filter((f) => f.type.startsWith('image/'));
+    e.target.value = '';
+    if (!escolhidos.length) return;
+    const espaco = LIMITE_FOTOS - fotos.length;
+    setAviso(escolhidos.length > espaco ? `Você pode enviar até ${LIMITE_FOTOS} fotos. Ficaram as primeiras.` : '');
+    setPreparando(true);
+    const reduzidas = await Promise.all(escolhidos.slice(0, espaco).map(comprimirFoto));
+    setPreparando(false);
+    onChange([...fotos, ...reduzidas]);
+  }
+
+  return (
+    <section aria-labelledby="titulo-fotos">
+      <h2 id="titulo-fotos" className="text-lg font-semibold text-ink">
+        Fotos <span className="text-base font-normal text-neutral-600">(opcional)</span>
+      </h2>
+      <p className="mt-1 text-base text-neutral-600">Se o seu profissional pediu, fotografe a região tratada com boa luz. Até {LIMITE_FOTOS} fotos.</p>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {previas.map((url, i) => (
+          <div key={url} className="relative aspect-square overflow-hidden rounded-xl border border-line bg-neutral-100">
+            <img src={url} alt={`Foto ${i + 1} escolhida`} className="h-full w-full object-cover" />
+            <button
+              type="button"
+              onClick={() => onChange(fotos.filter((_, j) => j !== i))}
+              aria-label={`Remover foto ${i + 1}`}
+              className="absolute right-1.5 top-1.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/80 text-white"
+            >
+              <X size={18} strokeWidth={2} />
+            </button>
+          </div>
+        ))}
+        {fotos.length < LIMITE_FOTOS && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={preparando}
+            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong text-sm font-medium text-ink transition-colors hover:bg-neutral-50 disabled:opacity-60"
+          >
+            <Camera size={24} strokeWidth={1.75} aria-hidden="true" />
+            {preparando ? 'Preparando…' : 'Adicionar'}
+          </button>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={adicionar} className="sr-only" tabIndex={-1} aria-hidden="true" />
+      {aviso && <p className="mt-2 text-sm text-neutral-600" role="status">{aviso}</p>}
+    </section>
+  );
+}
+
 // ─── Formulário do check-in ────────────────────────────────────────────────
 function FormCheckin({ token, dadosPortal, onEnviado }) {
   const [tarefasMarcadas, setTarefasMarcadas] = useState({});
   const [nivelDor,        setNivelDor]        = useState(null);
   const [observacoes,     setObservacoes]     = useState('');
+  const [fotos,           setFotos]           = useState([]);
   const [enviando,        setEnviando]        = useState(false);
   const [erroForm,        setErroForm]        = useState('');
 
@@ -74,6 +261,7 @@ function FormCheckin({ token, dadosPortal, onEnviado }) {
         nivelDor,
         observacoes:    observacoes || null,
         respostas,
+        fotos,
       });
       onEnviado();
     } catch (err) {
@@ -200,10 +388,12 @@ function FormCheckin({ token, dadosPortal, onEnviado }) {
         />
       </section>
 
+      <SeletorFotos fotos={fotos} onChange={setFotos} />
+
       <div className="space-y-3">
         {erroForm && <InlineAlert>{erroForm}</InlineAlert>}
         <Button type="submit" size="xl" loading={enviando} className="w-full">
-          {enviando ? 'Enviando check-in…' : 'Enviar check-in'}
+          {enviando ? (fotos.length ? 'Enviando check-in e fotos…' : 'Enviando check-in…') : 'Enviar check-in'}
         </Button>
       </div>
     </form>
@@ -228,6 +418,9 @@ export default function PatientCheckin() {
       if (dados.status === 'invalido' || dados.status === 'encerrado') {
         setStatusPortal(dados.status);
         setMensagem(dados.mensagem ?? '');
+      } else if (dados.status === 'consentimento_pendente') {
+        setDadosPortal(dados);
+        setStatusPortal('consentimento_pendente');
       } else if (dados.status === 'ativo') {
         setDadosPortal(dados);
         setStatusPortal('ativo');
@@ -250,13 +443,24 @@ export default function PatientCheckin() {
 
   if (loading) return <PortalSkeleton />;
 
+  const lembrete = dadosPortal?.aceitaLembretes !== undefined && (
+    <PreferenciaLembrete
+      token={token}
+      aceita={dadosPortal.aceitaLembretes}
+      onMudou={(aceitaLembretes) => setDadosPortal((d) => ({ ...d, aceitaLembretes }))}
+    />
+  );
+
   if (enviado && dadosPortal) {
     const primeiroNome = dadosPortal.paciente.nome?.split(' ')[0];
     return (
-      <EstadoCentral icone={Check} destaque titulo="Check-in enviado">
-        <p>Obrigado, {primeiroNome}. Seu relato do Dia {dadosPortal.recuperacao.diaAtual} foi registrado.</p>
-        <p className="mt-3">Registre um check-in por dia para que seu profissional acompanhe a sua evolução.</p>
-      </EstadoCentral>
+      <>
+        <EstadoCentral icone={Check} destaque titulo="Check-in enviado">
+          <p>Obrigado, {primeiroNome}. Seu relato do Dia {dadosPortal.recuperacao.diaAtual} foi registrado.</p>
+          <p className="mt-3">Registre um check-in por dia para que seu profissional acompanhe a sua evolução.</p>
+        </EstadoCentral>
+        {lembrete}
+      </>
     );
   }
 
@@ -285,6 +489,10 @@ export default function PatientCheckin() {
     );
   }
 
+  if (statusPortal === 'consentimento_pendente' && dadosPortal) {
+    return <TermoConsentimento token={token} dados={dadosPortal} onAceito={carregarPortal} />;
+  }
+
   if (statusPortal === 'sem_tratamento') {
     return (
       <EstadoCentral icone={Clock} titulo="Portal em preparação">
@@ -296,12 +504,20 @@ export default function PatientCheckin() {
   if (statusPortal === 'ativo' && dadosPortal) {
     if (dadosPortal.checkinHojeFeito) {
       return (
-        <EstadoCentral icone={Check} destaque titulo="Check-in de hoje enviado">
-          Você já enviou o check-in do Dia {dadosPortal.recuperacao.diaAtual}. Volte amanhã para registrar o próximo.
-        </EstadoCentral>
+        <>
+          <EstadoCentral icone={Check} destaque titulo="Check-in de hoje enviado">
+            Você já enviou o check-in do Dia {dadosPortal.recuperacao.diaAtual}. Volte amanhã para registrar o próximo.
+          </EstadoCentral>
+          {lembrete}
+        </>
       );
     }
-    return <FormCheckin token={token} dadosPortal={dadosPortal} onEnviado={() => setEnviado(true)} />;
+    return (
+      <>
+        <FormCheckin token={token} dadosPortal={dadosPortal} onEnviado={() => setEnviado(true)} />
+        {lembrete}
+      </>
+    );
   }
 
   return null;

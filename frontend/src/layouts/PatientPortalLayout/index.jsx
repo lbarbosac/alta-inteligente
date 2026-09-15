@@ -1,6 +1,6 @@
 // Arquivo: src/layouts/PatientPortalLayout/index.jsx
 import { Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import Brand from '../../components/Brand';
 
 /**
@@ -23,7 +23,8 @@ export default function PatientPortalLayout() {
       </main>
 
       <footer className="px-4 pb-6 text-center text-xs text-neutral-500">
-        Acompanhamento pós-operatório
+        Acompanhamento pós-operatório ·{' '}
+        <Link to="/privacidade" target="_blank" className="underline underline-offset-2 hover:text-ink">Privacidade</Link>
       </footer>
     </div>
   );
