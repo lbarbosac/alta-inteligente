@@ -1,6 +1,6 @@
 // Arquivo: src/pages/Login/index.jsx
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -192,7 +192,15 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="mt-12 text-xs text-neutral-500">AltaInteligente © {new Date().getFullYear()}</p>
+          <p className="mt-5 text-center">
+            <Link to="/esqueci-senha" className="text-sm font-medium text-ink underline-offset-2 hover:underline">Esqueci minha senha</Link>
+          </p>
+
+          <p className="mt-12 text-xs text-neutral-500">
+            AltaInteligente © {new Date().getFullYear()} ·{' '}
+            <Link to="/privacidade" className="underline-offset-2 hover:text-ink hover:underline">Privacidade</Link> ·{' '}
+            <Link to="/termos" className="underline-offset-2 hover:text-ink hover:underline">Termos</Link>
+          </p>
         </div>
       </main>
     </div>

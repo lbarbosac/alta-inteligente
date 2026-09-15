@@ -1,6 +1,6 @@
 // Arquivo: frontend/src/routes/AppRoutes.jsx
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 // Cada tela vira um arquivo separado no build. O paciente, que abre o link no celular,
@@ -20,6 +20,11 @@ const PatientCheckin      = lazy(() => import('../pages/PatientPortal/Checkin'))
 const AdminDashboard      = lazy(() => import('../pages/Admin/Dashboard'));
 const AdminProfessionals  = lazy(() => import('../pages/Admin/Professionals'));
 const NotFound            = lazy(() => import('../pages/NotFound'));
+const Privacidade         = lazy(() => import('../pages/Legal/Privacidade'));
+const Termos              = lazy(() => import('../pages/Legal/Termos'));
+const EsqueciSenha        = lazy(() => import('../pages/EsqueciSenha'));
+const RedefinirSenha      = lazy(() => import('../pages/RedefinirSenha'));
+const AceiteTermos        = lazy(() => import('../pages/AceiteTermos'));
 
 function TelaEmBranco() {
   return <div className="min-h-screen bg-canvas" aria-busy="true" />;
@@ -27,8 +32,14 @@ function TelaEmBranco() {
 
 function PrivateRoute({ children }) {
   const { usuario, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <TelaEmBranco />;
-  return usuario ? children : <Navigate to="/login" replace />;
+  if (!usuario) return <Navigate to="/login" replace />;
+  // Profissional só entra no painel depois de aceitar os termos da versão atual
+  if (usuario.role === 'professional' && usuario.precisaAceitarTermos && pathname !== '/aceite-termos') {
+    return <Navigate to="/aceite-termos" replace />;
+  }
+  return children;
 }
 
 function PublicOnlyRoute({ children }) {
@@ -53,6 +64,13 @@ export default function AppRoutes() {
 
         {/* Pública */}
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+        <Route path="/esqueci-senha" element={<PublicOnlyRoute><EsqueciSenha /></PublicOnlyRoute>} />
+        <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+        <Route path="/privacidade" element={<Privacidade />} />
+        <Route path="/termos" element={<Termos />} />
+
+        {/* Aceite dos termos pelo profissional (fora do layout do painel) */}
+        <Route path="/aceite-termos" element={<PrivateRoute><AceiteTermos /></PrivateRoute>} />
 
         {/* Portal do paciente */}
         <Route element={<PatientPortalLayout />}>
