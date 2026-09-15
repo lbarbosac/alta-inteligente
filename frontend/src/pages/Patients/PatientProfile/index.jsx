@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
-import { ArrowLeft, Check, ChevronDown, Copy, Pencil, Play, RefreshCw, XCircle, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ChevronDown, ClipboardList, Copy, Download, MessageCircle, Pencil, Play, RefreshCw, ShieldOff, XCircle } from 'lucide-react';
 import Avatar from '../../../components/Avatar';
-import Button from '../../../components/Button';
+import Button, { buttonClass } from '../../../components/Button';
 import Card from '../../../components/Card';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import EmptyState from '../../../components/EmptyState';
@@ -15,11 +15,13 @@ import PainLevel from '../../../components/PainLevel';
 import PainScale from '../../../components/PainScale';
 import RecoveryStatusBadge from '../../../components/RecoveryStatusBadge';
 import { createTreatment, updateTreatment } from '../../../services/treatmentService';
+import { anonimizarPaciente, exportarDadosPaciente } from '../../../services/patientService';
+import { linkDoPaciente, linkWhatsApp, urlDaApi } from '../../../utils/links';
 import { getProtocols } from '../../../services/protocolService';
 import { usePatientProfile } from '../../../hooks/usePatientProfile';
 import { calculatePatientStatus } from '../../../utils/recoveryStatus';
 import { zonaDor, COR_ZONA } from '../../../utils/painLevelColor';
-import { calcularIdade, formatarDataCivil, formatarDataHora, formatarRelativo } from '../../../utils/formatDate';
+import { calcularIdade, formatarData, formatarDataCivil, formatarDataHora, formatarRelativo } from '../../../utils/formatDate';
 
 // Cor do número de dor sobre o bloco escuro (red-400 7,16:1 e amber-400 11,86:1 sobre ink)
 const COR_DOR_NO_ESCURO = { critico: 'text-red-400', atencao: 'text-amber-400', normal: 'text-white', vazia: 'text-white' };
@@ -84,11 +86,61 @@ function GraficoDor({ checkins }) {
   );
 }
 
+// ─── Fotos do check-in ─────────────────────────────────────────────────────
+// Os links das fotos expiram em 15 minutos. Se a página ficou aberta mais que isso,
+// a imagem falha e o botão busca links novos.
+function FotosCheckin({ fotos, dia, onLinksExpirados }) {
+  const [ampliada, setAmpliada] = useState(null);
+  const [falhou, setFalhou] = useState(false);
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-ink">Fotos</p>
+      {falhou ? (
+        <div className="mt-2 flex items-center gap-3">
+          <p className="text-sm text-neutral-600">O link das fotos expirou.</p>
+          <Button size="sm" variant="secondary" onClick={() => { setFalhou(false); onLinksExpirados(); }}>Carregar de novo</Button>
+        </div>
+      ) : (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {fotos.map((foto, i) => (
+            <li key={foto.id}>
+              <button
+                type="button"
+                onClick={() => setAmpliada(i)}
+                aria-label={`Ampliar foto ${i + 1} do Dia ${dia}`}
+                className="block h-24 w-24 overflow-hidden rounded-lg border border-line bg-neutral-100"
+              >
+                <img src={urlDaApi(foto.url)} alt="" loading="lazy" onError={() => setFalhou(true)} className="h-full w-full object-cover" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal isOpen={ampliada !== null} onClose={() => setAmpliada(null)} title={`Foto ${(ampliada ?? 0) + 1} de ${fotos.length} · Dia ${dia}`} size="lg">
+        {ampliada !== null && (
+          <div className="space-y-4">
+            <img src={urlDaApi(fotos[ampliada].url)} alt={`Foto ${ampliada + 1} enviada pelo paciente no Dia ${dia}`} className="mx-auto max-h-[65vh] w-auto rounded-lg" />
+            {fotos.length > 1 && (
+              <div className="flex justify-between">
+                <Button variant="secondary" size="sm" disabled={ampliada === 0} onClick={() => setAmpliada(ampliada - 1)}>Anterior</Button>
+                <Button variant="secondary" size="sm" disabled={ampliada === fotos.length - 1} onClick={() => setAmpliada(ampliada + 1)}>Próxima</Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Histórico de check-ins ────────────────────────────────────────────────
-function LinhaCheckin({ checkin }) {
+function LinhaCheckin({ checkin, onLinksExpirados }) {
   const [aberto, setAberto] = useState(false);
   const feitas = checkin.respostas?.filter(r => r.concluido).length ?? 0;
   const total = checkin.respostas?.length ?? 0;
+  const qtdFotos = checkin.fotos?.length ?? 0;
   const idPainel = `checkin-${checkin.id}`;
 
   return (
@@ -107,6 +159,12 @@ function LinhaCheckin({ checkin }) {
         </div>
         {total > 0 && <span className="hidden text-sm text-neutral-600 tabular-nums sm:inline">{feitas} de {total} orientaç{total !== 1 ? 'ões' : 'ão'}</span>}
         {checkin.observacoes && <span className="hidden rounded-full border border-line px-2 py-0.5 text-xs text-neutral-600 md:inline">Com observação</span>}
+        {qtdFotos > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-neutral-700">
+            <Camera size={12} strokeWidth={2} aria-hidden="true" />
+            {qtdFotos}<span className="sr-only"> foto{qtdFotos !== 1 ? 's' : ''}</span>
+          </span>
+        )}
         <ChevronDown size={16} strokeWidth={1.75} className={`flex-shrink-0 text-neutral-500 transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
 
@@ -136,6 +194,7 @@ function LinhaCheckin({ checkin }) {
               ))}
             </ul>
           )}
+          {qtdFotos > 0 && <FotosCheckin fotos={checkin.fotos} dia={checkin.diaRecuperacao} onLinksExpirados={onLinksExpirados} />}
         </div>
       )}
     </li>
@@ -162,7 +221,7 @@ function Historico({ checkins, loading, erro, onRefresh }) {
       ) : checkins.length === 0 ? (
         <p className="px-5 py-8 text-sm text-neutral-600">Nenhum check-in recebido ainda. Se o paciente já enviou, clique em Atualizar.</p>
       ) : (
-        <ul className="divide-y divide-line">{[...checkins].reverse().map(c => <LinhaCheckin key={c.id} checkin={c} />)}</ul>
+        <ul className="divide-y divide-line">{[...checkins].reverse().map(c => <LinhaCheckin key={c.id} checkin={c} onLinksExpirados={onRefresh} />)}</ul>
       )}
     </Card>
   );
@@ -311,6 +370,51 @@ function ModalEditarProcedimento({ isOpen, tratamento, onClose, onSuccess }) {
   );
 }
 
+// ─── Privacidade (LGPD) ────────────────────────────────────────────────────
+function CardPrivacidade({ paciente, onAnonimizado }) {
+  const [exportando, setExportando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [confirmar, setConfirmar] = useState(false);
+
+  async function exportar() {
+    setExportando(true);
+    setErro('');
+    try { await exportarDadosPaciente(paciente.id); }
+    catch { setErro('Não foi possível exportar agora. Tente novamente.'); }
+    finally { setExportando(false); }
+  }
+
+  return (
+    <Card title="Privacidade" description="Pedidos do paciente sobre os próprios dados (LGPD)">
+      {paciente.anonimizadoEm ? (
+        <p className="text-sm text-neutral-600">Dados pessoais anonimizados em {formatarData(paciente.anonimizadoEm)}.</p>
+      ) : (
+        <div className="space-y-3">
+          <Button variant="secondary" className="w-full" loading={exportando} onClick={exportar}>
+            {!exportando && <Download size={16} strokeWidth={1.75} aria-hidden="true" />}
+            {exportando ? 'Preparando arquivo…' : 'Exportar dados do paciente'}
+          </Button>
+          <Button variant="secondary" className="w-full hover:border-red-600 hover:text-red-700" onClick={() => setConfirmar(true)}>
+            <ShieldOff size={16} strokeWidth={1.75} aria-hidden="true" />
+            Anonimizar dados
+          </Button>
+          {erro && <InlineAlert>{erro}</InlineAlert>}
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmar}
+        titulo="Anonimizar dados do paciente"
+        descricao="Nome, telefone, e-mail, data de nascimento, observações e fotos serão apagados de forma definitiva, e o link do paciente para de funcionar. Os níveis de dor ficam guardados sem identificação. Use somente se não houver obrigação de guardar o prontuário deste paciente — e exporte os dados antes, se precisar."
+        labelConfirmar="Anonimizar definitivamente"
+        tom="danger"
+        onClose={() => setConfirmar(false)}
+        onConfirmar={async () => { await anonimizarPaciente(paciente.id); onAnonimizado(); }}
+      />
+    </Card>
+  );
+}
+
 // ─── Página ────────────────────────────────────────────────────────────────
 export default function PatientProfile() {
   const { id } = useParams();
@@ -333,7 +437,14 @@ export default function PatientProfile() {
   const idade = calcularIdade(paciente.dataNascimento);
   const ativo = tratamento?.status === 'ativo';
   const statusClinico = !tratamento ? 'sem_tratamento' : !ativo ? 'encerrado' : calculatePatientStatus(ultimoCheckin);
-  const linkPaciente = tratamento?.tokenPaciente ? `${window.location.origin}/p/${tratamento.tokenPaciente}` : null;
+  const linkPaciente = tratamento?.tokenPaciente ? linkDoPaciente(tratamento.tokenPaciente) : null;
+  const anonimizado = Boolean(paciente.anonimizadoEm);
+  const consentimento = tratamento?.consentimentos?.[0] ?? null;
+  const checkinHojeFeito = Boolean(tratamento) && ultimoCheckin?.diaRecuperacao === tratamento.diaAtual;
+  // Lembrete manual: abre o WhatsApp do próprio profissional com a mensagem pronta
+  const linkLembrete = ativo && !checkinHojeFeito && linkPaciente
+    ? linkWhatsApp(paciente.telefone, `Olá, ${paciente.nome.split(' ')[0]}. Como está a sua recuperação hoje? Faça o check-in do Dia ${tratamento.diaAtual}: ${linkPaciente}`)
+    : null;
 
   function copiarLink() {
     navigator.clipboard.writeText(linkPaciente)
@@ -364,8 +475,14 @@ export default function PatientProfile() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {ativo ? (
+          {anonimizado ? null : ativo ? (
             <>
+              {linkLembrete && (
+                <a href={linkLembrete} target="_blank" rel="noopener noreferrer" className={buttonClass()}>
+                  <MessageCircle size={16} strokeWidth={1.75} aria-hidden="true" />
+                  Lembrar pelo WhatsApp
+                </a>
+              )}
               <Button variant="secondary" onClick={copiarLink}>
                 {copia === 'ok' ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.75} aria-hidden="true" />}
                 {copia === 'ok' ? 'Link copiado' : 'Copiar link do paciente'}
@@ -387,6 +504,10 @@ export default function PatientProfile() {
           )}
         </div>
       </header>
+
+      {anonimizado && (
+        <InlineAlert tone="neutro">Os dados pessoais deste paciente foram anonimizados em {formatarData(paciente.anonimizadoEm)}. O histórico clínico ficou sem identificação.</InlineAlert>
+      )}
 
       {copia === 'erro' && (
         <InlineAlert tone="neutro">Não foi possível copiar automaticamente. Link do paciente: <span className="break-all font-normal">{linkPaciente}</span></InlineAlert>
@@ -440,9 +561,13 @@ export default function PatientProfile() {
                 { termo: 'Protocolo',    valor: `${tratamento.versaoProtocolo?.protocolo?.nome ?? '—'} · v${tratamento.versaoProtocolo?.versao ?? 1}` },
                 { termo: 'Data',         valor: formatarDataCivil(tratamento.dataProcedimento) },
                 { termo: 'Situação',     valor: ativo ? 'Em andamento' : 'Encerrado' },
+                { termo: 'Termo',        valor: consentimento ? `Aceito em ${formatarData(consentimento.aceitoEm)}` : 'Aguardando aceite do paciente' },
+                consentimento && { termo: 'Lembretes', valor: consentimento.aceitaLembretes ? 'Aceitou pelo WhatsApp' : 'Não quis receber' },
               ]} />
             </Card>
           )}
+
+          <CardPrivacidade paciente={paciente} onAnonimizado={refetch} />
         </aside>
       </div>
 
