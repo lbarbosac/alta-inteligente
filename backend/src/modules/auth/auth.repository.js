@@ -38,8 +38,46 @@ async function findProfessionalByEmail(email) {
       senha:        true,
       especialidade: true,
       ativo:        true,
+      termosVersao: true,
     },
   });
 }
 
-module.exports = { findAdminByEmail, findProfessionalByEmail };
+// ─── Redefinição de senha ──────────────────────────────────────────────────
+
+/** Invalida links anteriores: só o pedido mais recente funciona. */
+async function invalidateResetTokens(perfil, usuarioId) {
+  return prisma.tokenRedefinicaoSenha.updateMany({
+    where: { perfil, usuarioId, usadoEm: null },
+    data:  { usadoEm: new Date() },
+  });
+}
+
+async function createResetToken(data) {
+  return prisma.tokenRedefinicaoSenha.create({ data, select: { id: true } });
+}
+
+async function findValidResetToken(tokenHash) {
+  return prisma.tokenRedefinicaoSenha.findFirst({
+    where:  { tokenHash, usadoEm: null, expiraEm: { gt: new Date() } },
+    select: { id: true, perfil: true, usuarioId: true },
+  });
+}
+
+/** Troca a senha e queima o token na mesma transação. */
+async function resetPassword({ tokenId, perfil, usuarioId, senhaHash }) {
+  const tabela = perfil === 'admin' ? prisma.administrador : prisma.profissional;
+  return prisma.$transaction([
+    tabela.update({ where: { id: usuarioId }, data: { senha: senhaHash }, select: { id: true } }),
+    prisma.tokenRedefinicaoSenha.update({ where: { id: tokenId }, data: { usadoEm: new Date() } }),
+  ]);
+}
+
+module.exports = {
+  findAdminByEmail,
+  findProfessionalByEmail,
+  invalidateResetTokens,
+  createResetToken,
+  findValidResetToken,
+  resetPassword,
+};
