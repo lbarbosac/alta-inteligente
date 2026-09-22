@@ -37,7 +37,8 @@ export default function Field({ label, htmlFor, hint, error, opcional = false, c
   return (
     <div className={`space-y-1.5 ${className}`}>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-ink">
+        // O id do rótulo nomeia também a lista do Select (aria-labelledby)
+        <label id={`${id}-rotulo`} htmlFor={id} className="block text-sm font-medium text-ink">
           {label}{opcional && <span className="font-normal text-neutral-500"> (opcional)</span>}
         </label>
       )}

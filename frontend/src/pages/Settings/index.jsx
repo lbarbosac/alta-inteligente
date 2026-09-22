@@ -5,8 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import PageHeader from '../../components/PageHeader';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
-import Field, { inputClass } from '../../components/Field';
+import Field from '../../components/Field';
 import InlineAlert from '../../components/InlineAlert';
+import Select from '../../components/Select';
 import { getPreferencias, salvarPreferencias } from '../../services/accountService';
 import { esqueciSenha } from '../../services/authService';
 import { formatarData } from '../../utils/formatDate';
@@ -14,7 +15,8 @@ import { formatarData } from '../../utils/formatDate';
 // 06:00 a 20:00, de 30 em 30 minutos (mesma regra do backend)
 const HORARIOS = Array.from({ length: 29 }, (_, i) => {
   const minutos = 6 * 60 + i * 30;
-  return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
+  const hora = `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
+  return { value: hora, label: hora };
 });
 
 function Interruptor({ ligado, onChange, rotulo, descricao }) {
@@ -79,9 +81,12 @@ function NotificacoesProfissional() {
               descricao="Quando um paciente informar dor 7 ou mais, ou piora de 2 pontos em relação ao dia anterior."
             />
             <Field label="Horário do lembrete diário" hint="O paciente que aceitou lembretes e ainda não fez o check-in recebe a mensagem a partir deste horário.">
-              <select value={form.horaLembrete} onChange={(e) => setForm((f) => ({ ...f, horaLembrete: e.target.value }))} className={inputClass(false, { className: 'max-w-40 cursor-pointer' })}>
-                {HORARIOS.map((h) => <option key={h} value={h}>{h}</option>)}
-              </select>
+              <Select
+                value={form.horaLembrete}
+                onChange={(horaLembrete) => setForm((f) => ({ ...f, horaLembrete }))}
+                options={HORARIOS}
+                className="max-w-40"
+              />
             </Field>
 
             <div className="rounded-lg bg-neutral-50 px-4 py-3 text-sm text-neutral-700">

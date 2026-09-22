@@ -25,7 +25,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    const primeiroCampo = painelRef.current?.querySelector('input:not([type=hidden]), select, textarea');
+    const primeiroCampo = painelRef.current?.querySelector('input:not([type=hidden]), select, textarea, [role="combobox"]');
     (primeiroCampo ?? painelRef.current)?.focus();
 
     function onKeyDown(e) {
@@ -51,8 +51,9 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
 
   const larguraMax = size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg';
 
+  // !m-0: dentro de um `space-y-*` da página o modal herdava margin-top e a faixa de cima ficava sem o fundo escuro
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 !m-0 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-ink/50" onClick={onClose} aria-hidden="true" />
 
       <div
