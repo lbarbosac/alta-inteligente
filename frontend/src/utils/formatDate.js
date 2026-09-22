@@ -28,6 +28,13 @@ export function formatarRelativo(data) {
   return `há ${dias} dia${dias !== 1 ? 's' : ''}`;
 }
 
+// Hoje em AAAA-MM-DD no fuso do navegador, para o `max` de campo de data.
+// toISOString() daria a data UTC: depois das 21h no Brasil já seria amanhã.
+export function hojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function dataPorExtenso(data = new Date()) {
   return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(data);
 }

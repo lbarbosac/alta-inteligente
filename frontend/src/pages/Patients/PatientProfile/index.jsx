@@ -14,14 +14,15 @@ import Modal from '../../../components/Modal';
 import PainLevel from '../../../components/PainLevel';
 import PainScale from '../../../components/PainScale';
 import RecoveryStatusBadge from '../../../components/RecoveryStatusBadge';
+import Select from '../../../components/Select';
 import { createTreatment, updateTreatment } from '../../../services/treatmentService';
 import { anonimizarPaciente, exportarDadosPaciente } from '../../../services/patientService';
 import { linkDoPaciente, linkWhatsApp, urlDaApi } from '../../../utils/links';
-import { getProtocols } from '../../../services/protocolService';
 import { usePatientProfile } from '../../../hooks/usePatientProfile';
+import { useProtocols } from '../../../hooks/useProtocols';
 import { calculatePatientStatus } from '../../../utils/recoveryStatus';
 import { zonaDor, COR_ZONA } from '../../../utils/painLevelColor';
-import { calcularIdade, formatarData, formatarDataCivil, formatarDataHora, formatarRelativo } from '../../../utils/formatDate';
+import { calcularIdade, formatarData, formatarDataCivil, formatarDataHora, formatarRelativo, hojeISO } from '../../../utils/formatDate';
 
 // Cor do número de dor sobre o bloco escuro (red-400 7,16:1 e amber-400 11,86:1 sobre ink)
 const COR_DOR_NO_ESCURO = { critico: 'text-red-400', atencao: 'text-amber-400', normal: 'text-white', vazia: 'text-white' };
@@ -277,18 +278,17 @@ function ListaDados({ itens }) {
 }
 
 // ─── Modais ────────────────────────────────────────────────────────────────
+const FORM_TRATAMENTO = { protocoloId: '', nomeProcedimento: '', dataProcedimento: '' };
+
 function ModalVincular({ isOpen, pacienteId, onClose, onSuccess }) {
-  const [prots,  setProts]  = useState([]);
-  const [load,   setLoad]   = useState(false);
-  const [form,   setForm]   = useState({ protocoloId: '', nomeProcedimento: '', dataProcedimento: '' });
+  const { opcoes, carregando, erro: erroProtocolos } = useProtocols(isOpen);
+  const [form,   setForm]   = useState(FORM_TRATAMENTO);
   const [saving, setSaving] = useState(false);
   const [erro,   setErro]   = useState('');
 
-  // useEffect (não useState) para carregar protocolos ao abrir o modal
+  // useEffect (não useState) para limpar o formulário ao abrir o modal
   useEffect(() => {
-    if (!isOpen) return;
-    setLoad(true); setErro(''); setForm({ protocoloId: '', nomeProcedimento: '', dataProcedimento: '' });
-    getProtocols().then(d => setProts(d.filter(p => p.ativo) ?? [])).catch(() => setErro('Erro ao carregar protocolos.')).finally(() => setLoad(false));
+    if (isOpen) { setForm(FORM_TRATAMENTO); setErro(''); }
   }, [isOpen]);
 
   async function submit(e) {
@@ -305,28 +305,33 @@ function ModalVincular({ isOpen, pacienteId, onClose, onSuccess }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Iniciar tratamento">
       <form onSubmit={submit} noValidate className="space-y-4">
-        {load ? <div className="skeleton h-16" /> : prots.length === 0 ? (
+        {erroProtocolos ? <InlineAlert>{erroProtocolos}</InlineAlert> : carregando ? <div className="skeleton h-16" /> : opcoes.length === 0 ? (
           <InlineAlert tone="neutro">
             Nenhum protocolo ativo. <Link to="/protocols/new" className="underline underline-offset-2">Criar protocolo</Link>
           </InlineAlert>
         ) : (
           <Field label="Protocolo">
-            <select value={form.protocoloId} onChange={e => setForm(p => ({ ...p, protocoloId: e.target.value }))} className={inputClass(false, { className: 'cursor-pointer' })}>
-              <option value="">Selecione</option>
-              {prots.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.diasPadrao} dias)</option>)}
-            </select>
+            <Select
+              searchable
+              value={form.protocoloId}
+              onChange={protocoloId => setForm(p => ({ ...p, protocoloId }))}
+              options={opcoes}
+              placeholder="Selecione um protocolo"
+              searchPlaceholder="Buscar protocolo"
+              emptyText="Nenhum protocolo com esse nome."
+            />
           </Field>
         )}
         <Field label="Nome do procedimento">
           <input type="text" placeholder="Ex.: Extração de sisos" value={form.nomeProcedimento} onChange={e => setForm(p => ({ ...p, nomeProcedimento: e.target.value }))} className={inputClass()} />
         </Field>
         <Field label="Data do procedimento" hint="O Dia 1 da recuperação é a data do procedimento.">
-          <input type="date" max={new Date().toISOString().split('T')[0]} value={form.dataProcedimento} onChange={e => setForm(p => ({ ...p, dataProcedimento: e.target.value }))} className={inputClass()} />
+          <input type="date" max={hojeISO()} value={form.dataProcedimento} onChange={e => setForm(p => ({ ...p, dataProcedimento: e.target.value }))} className={inputClass()} />
         </Field>
         {erro && <InlineAlert>{erro}</InlineAlert>}
         <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" loading={saving} disabled={prots.length === 0}>
+          <Button type="submit" loading={saving} disabled={opcoes.length === 0}>
             {!saving && <Play size={15} strokeWidth={1.75} aria-hidden="true" />}
             {saving ? 'Iniciando…' : 'Iniciar tratamento'}
           </Button>
