@@ -1,5 +1,5 @@
 // Arquivo: src/pages/Patients/PatientsList/index.jsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link }               from 'react-router-dom';
 import { useForm }            from 'react-hook-form';
 import { zodResolver }        from '@hookform/resolvers/zod';
@@ -7,7 +7,7 @@ import { z }                  from 'zod';
 import { UserPlus, Users }     from 'lucide-react';
 import PageHeader             from '../../../components/PageHeader';
 import Card                   from '../../../components/Card';
-import Button                 from '../../../components/Button';
+import Button, { buttonClass } from '../../../components/Button';
 import Field, { inputClass }  from '../../../components/Field';
 import InlineAlert            from '../../../components/InlineAlert';
 import Avatar                 from '../../../components/Avatar';
@@ -16,9 +16,12 @@ import SearchInput            from '../../../components/SearchInput';
 import EmptyState             from '../../../components/EmptyState';
 import RecoveryStatusBadge    from '../../../components/RecoveryStatusBadge';
 import Modal                  from '../../../components/Modal';
+import Select                 from '../../../components/Select';
 import { usePatients }        from '../../../hooks/usePatients';
+import { useProtocols }       from '../../../hooks/useProtocols';
 import { createPatient }      from '../../../services/patientService';
-import { calcularIdade }      from '../../../utils/formatDate';
+import { createTreatment }    from '../../../services/treatmentService';
+import { calcularIdade, hojeISO } from '../../../utils/formatDate';
 
 // ─── Máscara de telefone ───────────────────────────────────────────────────
 function mascaraTelefone(valor) {
@@ -32,14 +35,46 @@ function mascaraTelefone(valor) {
 // ─── Schema de validação ───────────────────────────────────────────────────
 const novoSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter ao menos 2 caracteres.'),
+  // errorMap, não message: com message o zod ainda mostrava "Invalid date" no campo vazio
   dataNascimento: z.coerce
-    .date({ message: 'Data inválida. Use AAAA-MM-DD.' })
+    .date({ errorMap: () => ({ message: 'Informe uma data de nascimento válida.' }) })
     .max(new Date(), { message: 'Data de nascimento não pode ser no futuro.' })
     .refine(d => d.getFullYear() >= 1900, { message: 'Ano inválido (mínimo: 1900).' }),
-  telefone: z.string().min(8, 'Telefone inválido.'),
+  telefone: z.string({ required_error: 'Informe o telefone.' }).min(8, 'Telefone inválido.'),
   email:    z.string().email('E-mail inválido.').optional().or(z.literal('')).nullable(),
   observacoes: z.string().optional().nullable(),
+  // Tratamento opcional: validado em errosDoTratamento
+  protocoloId:      z.string().optional(),
+  nomeProcedimento: z.string().optional(),
+  dataProcedimento: z.string().optional(),
 });
+
+// Escolhido um protocolo, procedimento e data passam a ser obrigatórios.
+// Fica fora do schema porque o zod para numa data de nascimento inválida e não rodaria esta regra:
+// validando à parte, todos os erros aparecem no mesmo envio.
+function errosDoTratamento({ protocoloId, nomeProcedimento = '', dataProcedimento }) {
+  if (!protocoloId) return {};
+  const erros = {};
+  if (nomeProcedimento.trim().length < 2) {
+    erros.nomeProcedimento = { type: 'custom', message: 'Informe o procedimento (mínimo 2 caracteres).' };
+  }
+  if (!dataProcedimento) {
+    erros.dataProcedimento = { type: 'custom', message: 'Informe a data do procedimento.' };
+  } else if (dataProcedimento > hojeISO()) {
+    erros.dataProcedimento = { type: 'custom', message: 'A data do procedimento não pode ser no futuro.' };
+  }
+  return erros;
+}
+
+async function validarNovoPaciente(valores, contexto, opcoes) {
+  const resultado = await zodResolver(novoSchema)(valores, contexto, opcoes);
+  const extras = errosDoTratamento(valores);
+  if (!Object.keys(extras).length) return resultado;
+  return { values: {}, errors: { ...resultado.errors, ...extras } };
+}
+
+const SEM_PROTOCOLO = { value: '', label: 'Nenhum, iniciar depois' };
+const TRATAMENTO_VAZIO = { protocoloId: '', nomeProcedimento: '', dataProcedimento: '' };
 
 const FILTROS = [
   { id: 'todos',     label: 'Todos',              aceita: () => true },
@@ -70,19 +105,31 @@ function ListaSkeleton() {
 function ModalNovoPaciente({ isOpen, onClose, onSuccess }) {
   const [erroServidor, setErroServidor] = useState('');
   const [telefone, setTelefone] = useState('');
+  // Paciente salvo, mas o tratamento falhou: o modal mostra o aviso em vez do formulário
+  const [semTratamento, setSemTratamento] = useState(null);
+  const abrirPerfilRef = useRef(null);
+  const { opcoes, carregando, erro: erroProtocolos } = useProtocols(isOpen);
+
+  // O formulário some ao trocar pelo aviso: o foco vai para a ação principal
+  useEffect(() => { if (semTratamento) abrirPerfilRef.current?.focus(); }, [semTratamento]);
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
-    formState: { errors, isSubmitting },
-  } = useForm({ resolver: zodResolver(novoSchema) });
+    clearErrors,
+    watch,
+    formState: { errors, isSubmitting, isSubmitted },
+  } = useForm({ resolver: validarNovoPaciente, defaultValues: TRATAMENTO_VAZIO });
+
+  const protocoloId = watch('protocoloId');
 
   function handleClose() {
     reset();
     setErroServidor('');
     setTelefone('');
+    setSemTratamento(null);
     onClose();
   }
 
@@ -92,28 +139,59 @@ function ModalNovoPaciente({ isOpen, onClose, onSuccess }) {
     setValue('telefone', masked, { shouldValidate: true });
   }
 
-  async function onSubmit(dados) {
+  function escolherProtocolo(id) {
+    setValue('protocoloId', id, { shouldValidate: isSubmitted });
+    if (!id) clearErrors(['nomeProcedimento', 'dataProcedimento']);
+  }
+
+  async function onSubmit({ protocoloId: protocolo, nomeProcedimento, dataProcedimento, ...dados }) {
     setErroServidor('');
+    let paciente;
     try {
-      const payload = {
+      paciente = await createPatient({
         ...dados,
         telefone,
         email:       dados.email       || null,
         observacoes: dados.observacoes || null,
-      };
-      await createPatient(payload);
-      reset();
-      setTelefone('');
-      onSuccess();
-      handleClose();
+      });
     } catch (err) {
-      setErroServidor(
-        err.response?.data?.message || 'Erro ao cadastrar paciente. Tente novamente.'
-      );
+      setErroServidor(err.response?.data?.message || 'Erro ao cadastrar paciente. Tente novamente.');
+      return;
     }
+
+    if (protocolo) {
+      try {
+        await createTreatment({ pacienteId: paciente.id, protocoloId: protocolo, nomeProcedimento: nomeProcedimento.trim(), dataProcedimento });
+      } catch (err) {
+        onSuccess();
+        setSemTratamento({ id: paciente.id, motivo: err.response?.data?.message || 'Não foi possível conectar ao servidor.' });
+        return;
+      }
+    }
+
+    onSuccess();
+    handleClose();
   }
 
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
+
+  if (semTratamento) {
+    return (
+      <Modal isOpen={isOpen} onClose={handleClose} title="Novo paciente">
+        <div className="space-y-4">
+          <InlineAlert>
+            O paciente foi cadastrado, mas o tratamento não foi iniciado.
+            <span className="mt-1 block font-normal">{semTratamento.motivo}</span>
+          </InlineAlert>
+          <p className="text-sm text-neutral-600">Abra o perfil do paciente e use “Iniciar tratamento” para tentar de novo.</p>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={handleClose}>Fechar</Button>
+            <Link ref={abrirPerfilRef} to={`/patients/${semTratamento.id}`} className={buttonClass()}>Abrir perfil do paciente</Link>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Novo paciente">
@@ -141,11 +219,50 @@ function ModalNovoPaciente({ isOpen, onClose, onSuccess }) {
           <textarea rows={3} {...register('observacoes')} className={inputClass(errors.observacoes, { className: 'resize-none' })} />
         </Field>
 
+        {/* Tratamento já no cadastro (opcional) */}
+        <div className="space-y-4 border-t border-line pt-5">
+          {erroProtocolos ? (
+            <InlineAlert tone="neutro">{erroProtocolos} Você pode iniciar o tratamento depois, no perfil do paciente.</InlineAlert>
+          ) : carregando ? (
+            <div className="skeleton h-16" />
+          ) : opcoes.length === 0 ? (
+            <p className="text-sm text-neutral-600">
+              Para iniciar um tratamento junto com o cadastro, crie um protocolo antes.{' '}
+              <Link to="/protocols/new" className="font-medium text-ink underline underline-offset-2">Criar protocolo</Link>
+            </p>
+          ) : (
+            <Field label="Protocolo" opcional hint="Escolha um para o acompanhamento começar junto com o cadastro.">
+              <Select
+                searchable
+                value={protocoloId}
+                onChange={escolherProtocolo}
+                options={[SEM_PROTOCOLO, ...opcoes]}
+                placeholder={SEM_PROTOCOLO.label}
+                searchPlaceholder="Buscar protocolo"
+                emptyText="Nenhum protocolo com esse nome."
+              />
+            </Field>
+          )}
+
+          {protocoloId && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nome do procedimento" error={errors.nomeProcedimento?.message}>
+                <input type="text" placeholder="Ex.: Extração de sisos" {...register('nomeProcedimento')} className={inputClass(errors.nomeProcedimento)} />
+              </Field>
+              <Field label="Data do procedimento" hint="O Dia 1 da recuperação é a data do procedimento." error={errors.dataProcedimento?.message}>
+                <input type="date" max={hoje} {...register('dataProcedimento')} className={inputClass(errors.dataProcedimento)} />
+              </Field>
+            </div>
+          )}
+        </div>
+
         {erroServidor && <InlineAlert>{erroServidor}</InlineAlert>}
 
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" onClick={handleClose}>Cancelar</Button>
-          <Button type="submit" loading={isSubmitting}>{isSubmitting ? 'Cadastrando…' : 'Cadastrar paciente'}</Button>
+          <Button type="submit" loading={isSubmitting}>
+            {isSubmitting ? 'Cadastrando…' : protocoloId ? 'Cadastrar e iniciar tratamento' : 'Cadastrar paciente'}
+          </Button>
         </div>
       </form>
     </Modal>
