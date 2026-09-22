@@ -13,7 +13,7 @@ const { iniciarLembretes } = require('./modules/notifications/notification.sched
 const app = express();
 
 // Atrás de proxy reverso o IP real vem no X-Forwarded-For (limites por IP e registro de acesso dependem disso)
-if (env.TRUST_PROXY) app.set('trust proxy', /^d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY);
+if (env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY);
 
 // ─── Segurança ─────────────────────────────────────────────────────────────
 app.use(helmet());
