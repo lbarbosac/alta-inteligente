@@ -1,20 +1,40 @@
 const { prisma } = require('../config/prismaClient');
 
+// Espera o banco subir em vez de derrubar o servidor: ligar o MySQL depois do `npm run dev`
+// (ou o banco demorar para subir junto com a máquina) passou a ser caso normal, não erro fatal.
+const TENTATIVAS = 60;
+const ESPERA_MS = 3000; // 60 × 3s = 3 minutos esperando
+
+const DICA = 'Ligue o MySQL (serviço MySQL80, no Windows). O servidor conecta sozinho quando ele subir.';
+
 /**
- * Testa a conexão com o banco de dados.
- * Chamado na inicialização do servidor para garantir que o banco
- * está acessível antes de aceitar requisições.
- *
- * Em caso de falha, loga o erro e encerra o processo para que
- * o servidor não suba em estado inválido.
+ * Conecta ao banco na inicialização, tentando de novo enquanto ele não responde.
+ * Só encerra o processo se o banco não aparecer dentro do tempo limite — assim o
+ * `npm run dev` não morre quando o MySQL ainda não está ligado.
  */
-async function connectDatabase() {
-  try {
-    await prisma.$connect();
-    console.log('✅ Banco de dados conectado com sucesso.');
-  } catch (error) {
-    console.error('❌ Falha ao conectar ao banco de dados:', error.message);
-    process.exit(1);
+async function connectDatabase({ tentativas = TENTATIVAS, esperaMs = ESPERA_MS } = {}) {
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      await prisma.$connect();
+      console.log('✅ Banco de dados conectado com sucesso.');
+      return;
+    } catch (error) {
+      const motivo = String(error.message).split('\n')[0];
+
+      if (tentativa >= tentativas) {
+        console.error(`❌ Sem conexão com o banco depois de ${tentativas} tentativas: ${motivo}`);
+        console.error(`   ${DICA}`);
+        process.exit(1);
+      }
+
+      // A cada 15 segundos, para não encher o terminal
+      if (tentativa === 1 || tentativa % 5 === 0) {
+        console.error(`⏳ Esperando o banco de dados (${tentativa}/${tentativas}): ${motivo}`);
+        console.error(`   ${DICA}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, esperaMs));
+    }
   }
 }
 
