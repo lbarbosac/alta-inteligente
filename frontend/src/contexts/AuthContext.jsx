@@ -26,6 +26,17 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
+  // Sessão expirada ou token inválido: o api.js avisa com este evento e a sessão é encerrada.
+  // Antes ninguém ouvia o evento e a tela ficava aberta com todas as chamadas falhando.
+  useEffect(() => {
+    function aoPerderSessao() {
+      if (!localStorage.getItem('@alta:token')) return;
+      logout();
+    }
+    window.addEventListener('alta:unauthorized', aoPerderSessao);
+    return () => window.removeEventListener('alta:unauthorized', aoPerderSessao);
+  }, []);
+
   /**
    * Realiza o login chamando a API de autenticação.
    * Persiste token e dados do usuário no localStorage.
@@ -46,6 +57,16 @@ export function AuthProvider({ children }) {
     return dadosUsuario;
   }
 
+  /** Atualiza parte dos dados do usuário logado (ex.: depois de aceitar os termos). */
+  function atualizarUsuario(parcial) {
+    setUsuario((atual) => {
+      if (!atual) return atual;
+      const novo = { ...atual, ...parcial };
+      localStorage.setItem('@alta:usuario', JSON.stringify(novo));
+      return novo;
+    });
+  }
+
   /**
    * Encerra a sessão limpando localStorage e estado local.
    */
@@ -56,7 +77,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, login, logout }}>
+    <AuthContext.Provider value={{ usuario, loading, login, logout, atualizarUsuario }}>
       {children}
     </AuthContext.Provider>
   );

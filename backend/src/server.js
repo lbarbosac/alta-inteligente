@@ -8,8 +8,12 @@ const { errorHandler }      = require('./shared/middlewares/errorHandler');
 const { requestLogger }     = require('./shared/middlewares/requestLogger');
 const { globalRateLimiter } = require('./shared/middlewares/rateLimiter');
 const { connectDatabase, disconnectDatabase } = require('./shared/database/connection');
+const { iniciarLembretes } = require('./modules/notifications/notification.scheduler');
 
 const app = express();
+
+// Atrás de proxy reverso o IP real vem no X-Forwarded-For (limites por IP e registro de acesso dependem disso)
+if (env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY);
 
 // ─── Segurança ─────────────────────────────────────────────────────────────
 app.use(helmet());
@@ -42,6 +46,7 @@ app.use(errorHandler);
 // ─── Inicialização ─────────────────────────────────────────────────────────
 async function bootstrap() {
   await connectDatabase();
+  iniciarLembretes();
 
   app.listen(env.PORT, () => {
     console.log(`🚀 AltaInteligente API rodando na porta ${env.PORT}`);

@@ -1,15 +1,17 @@
 // Arquivo: src/pages/Protocols/ProtocolForm/index.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom'; // Importamos o useParams
-import {
-  ArrowLeft, Plus, Trash2,
-  ChevronDown, ChevronUp, Loader2, Save,
-} from 'lucide-react';
-import { createProtocol, getProtocol, updateProtocol } from '../../../services/protocolService'; // Importamos as novas funções
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react';
+import PageHeader from '../../../components/PageHeader';
+import Card from '../../../components/Card';
+import Button from '../../../components/Button';
+import Field, { inputClass } from '../../../components/Field';
+import InlineAlert from '../../../components/InlineAlert';
+import { createProtocol, getProtocol, updateProtocol } from '../../../services/protocolService';
 
 export default function ProtocolForm() {
   const navigate = useNavigate();
-  const { id } = useParams(); // Pega o ID da URL se for edição (/protocols/:id)
+  const { id } = useParams(); // ID da URL se for edição (/protocols/:id)
   const isEditing = Boolean(id);
 
   const [nome,       setNome]       = useState('');
@@ -17,12 +19,12 @@ export default function ProtocolForm() {
   const [diasPadrao, setDiasPadrao] = useState('');
   const [dias,       setDias]       = useState([]);
   const [diaAberto,  setDiaAberto]  = useState(1);
-  const [carregando, setCarregando] = useState(false); // Estado para carregar dados do banco
+  const [carregando, setCarregando] = useState(false); // carregando dados do banco
   const [salvando,   setSalvando]   = useState(false);
   const [erro,       setErro]       = useState('');
   const [erros,      setErros]      = useState({});
 
-  // 1. Se for edição, busca os dados do protocolo no backend ao montar a tela
+  // 1. Se for edição, busca os dados do protocolo ao montar a tela
   useEffect(() => {
     if (!isEditing) return;
 
@@ -34,8 +36,7 @@ export default function ProtocolForm() {
         setNome(dados.nome || '');
         setDescricao(dados.descricao || '');
         setDiasPadrao(dados.diasPadrao ? String(dados.diasPadrao) : '');
-        
-        // Mapeia os dias e tarefas vindos do banco
+
         const diasCarregados = Array.from({ length: dados.diasPadrao }, (_, i) => {
           const diaNum = i + 1;
           const diaBanco = dados.dias?.find(d => d.numeroDia === diaNum);
@@ -45,7 +46,7 @@ export default function ProtocolForm() {
             tarefas: diaBanco?.tarefas || []
           };
         });
-        
+
         setDias(diasCarregados);
       } catch (err) {
         setErro('Erro ao carregar os dados do protocolo.');
@@ -58,7 +59,7 @@ export default function ProtocolForm() {
     carregarProtocolo();
   }, [id, isEditing]);
 
-  // 2. Controla a geração de novos dias (apenas se não estiver carregando os dados da edição)
+  // 2. Gera os dias conforme a duração (fora do carregamento da edição)
   useEffect(() => {
     if (carregando) return;
 
@@ -141,7 +142,6 @@ export default function ProtocolForm() {
         dias:       diasPayload,
       };
 
-      // Se for edição chama UPDATE, senão chama CREATE
       if (isEditing) {
         await updateProtocol(id, payload);
       } else {
@@ -158,230 +158,158 @@ export default function ProtocolForm() {
 
   const numDias = parseInt(diasPadrao) || 0;
 
-  const inputBase = `w-full px-4 py-3 rounded-xl border text-sm text-slate-900
-    placeholder:text-slate-300 outline-none transition-all
-    focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8`;
-
-  // Tela de Carregamento Bonita
   if (carregando) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-600" />
-        <p className="text-slate-500 text-sm">Carregando dados do protocolo...</p>
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-3" aria-busy="true">
+        <Loader2 size={24} className="animate-spin text-neutral-600" aria-hidden="true" />
+        <p className="text-sm text-neutral-600">Carregando dados do protocolo…</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div>
-        <button type="button" onClick={() => navigate('/protocols')}
-          className="inline-flex items-center gap-2 text-slate-500 text-sm font-medium
-            hover:text-slate-800 transition-colors mb-4">
-          <ArrowLeft size={16} strokeWidth={1.5} />
-          Voltar para Protocolos
-        </button>
-        <h1 className="text-slate-950 text-2xl font-extrabold tracking-tight">
-          {isEditing ? 'Editar Protocolo' : 'Novo Protocolo'}
-        </h1>
-        <p className="text-slate-400 text-sm font-light mt-1">
-          {isEditing 
-            ? 'Altere as orientações deste protocolo conforme necessário.' 
-            : 'Defina o protocolo e as orientações de cada dia de recuperação.'}
-        </p>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link to="/protocols" className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 transition-colors hover:text-ink">
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+        Protocolos
+      </Link>
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        <section className="bg-white border border-slate-100 rounded-2xl shadow-card p-6 space-y-4">
-          <h2 className="text-slate-950 text-sm font-semibold">Informações do Protocolo</h2>
+      <PageHeader
+        title={isEditing ? 'Editar protocolo' : 'Novo protocolo'}
+        description={isEditing
+          ? 'Altere as orientações deste protocolo conforme necessário.'
+          : 'Defina a duração e as orientações de cada dia de recuperação.'}
+      />
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Nome *
-            </label>
-            <input
-              type="text"
-              value={nome}
-              onChange={e => { setNome(e.target.value); setErros(p => ({ ...p, nome: '' })); }}
-              placeholder="Ex: Pós-operatório de Extração de Sisos"
-              className={`${inputBase} ${erros.nome ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}
-            />
-            {erros.nome && <p className="text-xs text-red-500 font-medium">{erros.nome}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Descrição (opcional)
-            </label>
-            <textarea
-              value={descricao}
-              onChange={e => setDescricao(e.target.value)}
-              rows={2}
-              placeholder="Descreva o objetivo e indicações deste protocolo…"
-              className={`${inputBase} border-slate-200 bg-white resize-none`}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Duração (dias) *
-            </label>
-            <div className="flex items-center gap-3">
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <Card title="Informações">
+          <div className="space-y-4">
+            <Field label="Nome" error={erros.nome}>
               <input
-                type="number"
-                min="1"
-                max="365"
-                value={diasPadrao}
-                onChange={e => { setDiasPadrao(e.target.value); setErros(p => ({ ...p, diasPadrao: '' })); }}
-                placeholder="7"
-                className={`w-28 px-4 py-3 rounded-xl border text-sm text-slate-900
-                  text-center font-semibold placeholder:text-slate-300 outline-none transition-all
-                  focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8
-                  ${erros.diasPadrao ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}
+                type="text"
+                value={nome}
+                onChange={e => { setNome(e.target.value); setErros(p => ({ ...p, nome: '' })); }}
+                placeholder="Ex.: Pós-operatório de extração de sisos"
+                className={inputClass(erros.nome)}
               />
-              <p className="text-slate-500 text-sm font-light">
-                {numDias > 0
-                  ? `${numDias} dia${numDias !== 1 ? 's' : ''} de recuperação`
-                  : 'Informe a duração do protocolo'}
-              </p>
-            </div>
-            {erros.diasPadrao && <p className="text-xs text-red-500 font-medium">{erros.diasPadrao}</p>}
+            </Field>
+
+            <Field label="Descrição" opcional hint="Objetivo e indicações do protocolo.">
+              <textarea
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+                rows={2}
+                className={inputClass(false, { className: 'resize-none' })}
+              />
+            </Field>
+
+            <Field label="Duração em dias" htmlFor="duracao-dias" error={erros.diasPadrao}>
+              <div className="flex items-center gap-3">
+                <input
+                  id="duracao-dias"
+                  aria-describedby={erros.diasPadrao ? "duracao-dias-erro" : undefined}
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="365"
+                  value={diasPadrao}
+                  onChange={e => { setDiasPadrao(e.target.value); setErros(p => ({ ...p, diasPadrao: '' })); }}
+                  placeholder="7"
+                  className={inputClass(erros.diasPadrao, { className: 'w-24 text-center font-semibold tabular-nums' })}
+                />
+                <span className="text-sm text-neutral-600">
+                  {numDias > 0 ? `${numDias} dia${numDias !== 1 ? 's' : ''} de recuperação` : 'Informe a duração'}
+                </span>
+              </div>
+            </Field>
           </div>
-        </section>
+        </Card>
 
         {numDias > 0 && (
-          <section className="bg-white border border-slate-100 rounded-2xl shadow-card overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-50">
-              <h2 className="text-slate-950 text-sm font-semibold">Orientações por Dia</h2>
-            </div>
-
-            <div className="divide-y divide-slate-50">
+          <Card padded={false} title="Orientações por dia" description="O paciente vê as orientações do dia em que está.">
+            <ul className="divide-y divide-line">
               {dias.map(dia => {
                 const aberto         = diaAberto === dia.numeroDia;
                 const tarefasValidas = dia.tarefas.filter(t => t.descricao.trim()).length;
+                const idPainel       = `dia-${dia.numeroDia}`;
 
                 return (
-                  <div key={dia.numeroDia}>
+                  <li key={dia.numeroDia}>
                     <button
                       type="button"
                       onClick={() => toggleDia(dia.numeroDia)}
-                      className="w-full flex items-center justify-between px-6 py-4
-                        hover:bg-slate-50/60 transition-colors text-left"
+                      aria-expanded={aberto}
+                      aria-controls={idPainel}
+                      className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:-outline-offset-2"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex items-center justify-center w-8 h-8
-                          rounded-xl bg-slate-950 text-white text-xs font-bold flex-shrink-0">
-                          D{dia.numeroDia}
+                      <span className="inline-flex h-8 min-w-10 items-center justify-center rounded-md bg-neutral-100 px-2 text-xs font-semibold text-ink tabular-nums">
+                        D{dia.numeroDia}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-ink">{dia.titulo.trim() || `Dia ${dia.numeroDia}`}</span>
+                        <span className="block text-sm text-neutral-500">
+                          {tarefasValidas > 0 ? `${tarefasValidas} orientaç${tarefasValidas !== 1 ? 'ões' : 'ão'}` : 'Sem orientações'}
                         </span>
-                        <div>
-                          <p className="text-slate-800 text-sm font-medium leading-none">
-                            {dia.titulo.trim() || `Dia ${dia.numeroDia}`}
-                          </p>
-                          <p className="text-slate-400 text-xs font-light mt-0.5">
-                            {tarefasValidas > 0
-                              ? `${tarefasValidas} orientaç${tarefasValidas !== 1 ? 'ões' : 'ão'}`
-                              : 'Nenhuma orientação adicionada'}
-                          </p>
-                        </div>
-                      </div>
-                      {aberto
-                        ? <ChevronUp size={16} strokeWidth={1.5} className="text-slate-400" />
-                        : <ChevronDown size={16} strokeWidth={1.5} className="text-slate-400" />}
+                      </span>
+                      <ChevronDown size={16} strokeWidth={1.75} className={`text-neutral-500 transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
                     </button>
 
                     {aberto && (
-                      <div className="px-6 pb-6 pt-2 bg-slate-50/30 space-y-4">
-                        <div className="space-y-1.5">
-                          <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-                            Título do dia (opcional)
-                          </label>
+                      <div id={idPainel} className="space-y-4 bg-neutral-50 px-5 pb-5 pt-4">
+                        <Field label="Título do dia" opcional>
                           <input
                             type="text"
                             value={dia.titulo}
                             onChange={e => setTitulo(dia.numeroDia, e.target.value)}
-                            placeholder={`Ex: Cuidados Iniciais — Dia ${dia.numeroDia}`}
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white
-                              text-sm text-slate-900 placeholder:text-slate-300 outline-none
-                              transition-all focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8"
+                            placeholder={`Ex.: Cuidados iniciais`}
+                            className={inputClass()}
                           />
-                        </div>
+                        </Field>
 
                         <div className="space-y-2">
-                          <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-                            Orientações do paciente
-                          </label>
+                          <p className="text-sm font-medium text-ink">Orientações ao paciente</p>
                           {dia.tarefas.map((tarefa, idx) => (
                             <div key={idx} className="flex items-center gap-2">
-                              <span className="text-slate-300 text-xs font-semibold w-5 text-right flex-shrink-0">
-                                {idx + 1}.
-                              </span>
+                              <span className="w-5 flex-shrink-0 text-right text-sm text-neutral-500 tabular-nums">{idx + 1}.</span>
                               <input
                                 type="text"
                                 value={tarefa.descricao}
                                 onChange={e => setTarefa(dia.numeroDia, idx, e.target.value)}
-                                placeholder="Ex: Tomar Amoxicilina 500mg a cada 8 horas"
-                                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white
-                                  text-sm text-slate-900 placeholder:text-slate-300 outline-none
-                                  transition-all focus:border-slate-950 focus:ring-2 focus:ring-slate-950/8"
+                                placeholder="Ex.: Tomar amoxicilina 500 mg a cada 8 horas"
+                                aria-label={`Orientação ${idx + 1} do dia ${dia.numeroDia}`}
+                                className={inputClass(false, { className: 'flex-1' })}
                               />
                               <button
                                 type="button"
                                 onClick={() => removeTarefa(dia.numeroDia, idx)}
-                                className="w-8 h-8 flex items-center justify-center rounded-lg
-                                  text-slate-300 hover:text-red-500 hover:bg-red-50
-                                  transition-all flex-shrink-0"
+                                aria-label={`Remover orientação ${idx + 1}`}
+                                className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-neutral-600 transition-colors hover:bg-white hover:text-red-700"
                               >
-                                <Trash2 size={14} strokeWidth={1.5} />
+                                <Trash2 size={16} strokeWidth={1.75} />
                               </button>
                             </div>
                           ))}
-                          <button
-                            type="button"
-                            onClick={() => addTarefa(dia.numeroDia)}
-                            className="inline-flex items-center gap-1.5 text-xs text-slate-500
-                              font-medium hover:text-slate-800 transition-colors mt-1"
-                          >
-                            <Plus size={13} strokeWidth={2} />
+                          <Button variant="ghost" size="sm" onClick={() => addTarefa(dia.numeroDia)}>
+                            <Plus size={15} strokeWidth={2} aria-hidden="true" />
                             Adicionar orientação
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
-          </section>
+            </ul>
+          </Card>
         )}
 
-        {erro && (
-          <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-100 rounded-xl">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-700 font-medium">{erro}</p>
-          </div>
-        )}
+        {erro && <InlineAlert>{erro}</InlineAlert>}
 
-        <div className="flex gap-3 pb-8">
-          <button
-            type="button"
-            onClick={() => navigate('/protocols')}
-            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700
-              text-sm font-medium hover:bg-slate-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={salvando || !nome.trim() || numDias < 1}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
-              bg-slate-950 text-white text-sm font-semibold
-              hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed
-              transition-all duration-150"
-          >
-            {salvando
-              ? <><Loader2 size={15} strokeWidth={2} className="animate-spin" /> Salvando…</>
-              : <><Save size={15} strokeWidth={1.5} /> {isEditing ? 'Salvar Alterações' : 'Salvar Protocolo'}</>}
-          </button>
+        <div className="flex flex-col-reverse gap-2 pb-8 sm:flex-row sm:justify-end">
+          <Button variant="secondary" onClick={() => navigate('/protocols')}>Cancelar</Button>
+          <Button type="submit" loading={salvando} disabled={!nome.trim() || numDias < 1}>
+            {salvando ? 'Salvando…' : isEditing ? 'Salvar alterações' : 'Salvar protocolo'}
+          </Button>
         </div>
       </form>
     </div>

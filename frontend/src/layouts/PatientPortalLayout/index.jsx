@@ -1,47 +1,31 @@
 // Arquivo: src/layouts/PatientPortalLayout/index.jsx
-import { Outlet } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { Suspense } from 'react';
+import { Link, Outlet } from 'react-router-dom';
+import Brand from '../../components/Brand';
 
 /**
- * Layout do Portal do Paciente.
- *
- * Completamente diferente do ProfessionalLayout:
- * - Sem sidebar
- * - Sem topbar administrativa
- * - Conteúdo centralizado em coluna estreita (mobile-first)
- * - Header mínimo apenas com a marca
+ * Portal do paciente: celular primeiro, fundo branco, uma coluna estreita.
+ * Sem menu e sem nada administrativo — a pessoa pode estar com dor e medicada.
  */
 export default function PatientPortalLayout() {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-
-      {/* ── Header mínimo ─────────────────────────────────────────────── */}
-      <header className="w-full bg-white border-b border-slate-100 px-6 py-4
-        flex items-center justify-center">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-slate-950 flex items-center justify-center">
-            <Activity size={12} strokeWidth={2} className="text-white" />
-          </div>
-          <span className="text-slate-950 text-sm font-semibold tracking-tight">
-            AltaInteligente
-          </span>
-        </div>
+    <div className="flex min-h-screen flex-col bg-white">
+      <header className="flex h-14 flex-shrink-0 items-center justify-center border-b border-line px-4">
+        <Brand />
       </header>
 
-      {/* ── Conteúdo da página ────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col items-center py-8 px-4">
-        <div className="w-full max-w-sm">
-          <Outlet />
+      <main className="flex-1 px-4 pb-10 pt-6 sm:pt-10">
+        <div className="mx-auto w-full max-w-md">
+          <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 
-      {/* ── Rodapé discreto ───────────────────────────────────────────── */}
-      <footer className="py-4 text-center">
-        <p className="text-slate-300 text-xs font-light">
-          AltaInteligente · Acompanhamento pós-operatório
-        </p>
+      <footer className="px-4 pb-6 text-center text-xs text-neutral-500">
+        Acompanhamento pós-operatório ·{' '}
+        <Link to="/privacidade" target="_blank" className="underline underline-offset-2 hover:text-ink">Privacidade</Link>
       </footer>
-
     </div>
   );
 }

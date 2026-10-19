@@ -1,4 +1,5 @@
 const service = require('./patient.service');
+const audit = require('../audit/audit.service');
 const { ApiResponse } = require('../../shared/utils/ApiResponse');
 
 /**
@@ -32,7 +33,35 @@ async function list(req, res) {
 async function getById(req, res) {
   const profissionalId = req.usuario.id;
   const paciente = await service.getPatientById(req.params.id, profissionalId);
+  await audit.registrar({ req, acao: 'paciente.visualizar', entidade: 'paciente', entidadeId: paciente.id });
   return ApiResponse.success(res, paciente, 'Paciente encontrado.');
+}
+
+/**
+ * GET /api/v1/patients/:id/exportar
+ * Baixa um JSON com todos os dados do paciente (pedido de acesso/portabilidade — LGPD).
+ */
+async function exportar(req, res) {
+  const dados = await service.exportarDados(req.params.id, req.usuario.id);
+  await audit.registrar({ req, acao: 'paciente.exportar', entidade: 'paciente', entidadeId: req.params.id });
+
+  const data = new Date().toISOString().slice(0, 10);
+  res.set({
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Disposition': `attachment; filename="dados-paciente-${data}.json"`,
+    'Cache-Control': 'no-store',
+  });
+  return res.send(JSON.stringify(dados, null, 2));
+}
+
+/**
+ * POST /api/v1/patients/:id/anonimizar
+ * Body: { confirmar: true }. Irreversível.
+ */
+async function anonimizar(req, res) {
+  const paciente = await service.anonimizarPaciente(req.params.id, req.usuario.id);
+  await audit.registrar({ req, acao: 'paciente.anonimizar', entidade: 'paciente', entidadeId: req.params.id });
+  return ApiResponse.success(res, paciente, 'Dados pessoais do paciente anonimizados.');
 }
 
 /**
@@ -46,4 +75,4 @@ async function update(req, res) {
   return ApiResponse.success(res, paciente, 'Paciente atualizado com sucesso.');
 }
 
-module.exports = { create, list, getById, update };
+module.exports = { create, list, getById, update, exportar, anonimizar };

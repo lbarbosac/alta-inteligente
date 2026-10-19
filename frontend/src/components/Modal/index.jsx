@@ -1,72 +1,84 @@
 // Arquivo: src/components/Modal/index.jsx
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
+const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /**
- * Modal reutilizável com overlay escuro e fechamento por backdrop.
+ * Modal acessível: role="dialog", Esc fecha, foco preso dentro e devolvido ao sair.
+ * No celular abre como folha de baixo para cima.
  *
- * @param {boolean}  isOpen   - Controla visibilidade
- * @param {Function} onClose  - Callback ao fechar
- * @param {string}   title    - Título do header
- * @param {node}     children - Conteúdo interno
- * @param {'sm'|'md'|'lg'} [size='md'] - Largura do modal
+ * O efeito de foco depende só de `isOpen` — se dependesse de `onClose` (função nova a cada
+ * render), o foco pularia para o primeiro campo a cada tecla digitada.
  */
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
-  // Bloqueia scroll do body enquanto modal está aberto
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+  const tituloId = useId();
+  const painelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
 
-  // Fecha com Escape
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
+    if (!isOpen) return;
+
+    const origem = document.activeElement;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const primeiroCampo = painelRef.current?.querySelector('input:not([type=hidden]), select, textarea, [role="combobox"]');
+    (primeiroCampo ?? painelRef.current)?.focus();
+
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { onCloseRef.current(); return; }
+      if (e.key !== 'Tab' || !painelRef.current) return;
+      const focaveis = [...painelRef.current.querySelectorAll(FOCAVEIS)];
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
     }
-    if (isOpen) window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose]);
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = overflowAnterior;
+      if (origem instanceof HTMLElement) origem.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const maxW = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
+  const larguraMax = size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg';
 
+  // !m-0: dentro de um `space-y-*` da página o modal herdava margin-top e a faixa de cima ficava sem o fundo escuro
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
+    <div className="fixed inset-0 z-50 !m-0 flex items-end justify-center sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-ink/50" onClick={onClose} aria-hidden="true" />
+
       <div
-        className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Painel */}
-      <div className={`relative bg-white rounded-2xl shadow-float w-full ${maxW}
-        max-h-[90vh] flex flex-col overflow-hidden`}>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-slate-950 text-base font-semibold">{title}</h2>
+        ref={painelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={tituloId}
+        tabIndex={-1}
+        className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl
+          focus:outline-none sm:rounded-xl ${larguraMax}`}
+      >
+        <div className="flex flex-shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-4">
+          <h2 id={tituloId} className="text-base font-semibold text-ink">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center
-              text-slate-400 hover:text-slate-600 hover:bg-slate-100
-              transition-all duration-150"
-            aria-label="Fechar modal"
+            aria-label="Fechar"
+            className="-mr-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-neutral-600
+              transition-colors hover:bg-neutral-100 hover:text-ink"
           >
-            <X size={16} strokeWidth={1.5} />
+            <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        {/* Conteúdo (scrollável) */}
-        <div className="overflow-y-auto flex-1 px-6 py-5">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
       </div>
     </div>
   );

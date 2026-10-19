@@ -29,6 +29,15 @@ model Profissional {
   ativo         Boolean     @default(true) @map("ativo")
   criadoEm      DateTime    @default(now()) @map("criado_em")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+
+  // Preferências de notificação
+  horaLembrete  String      @default("09:00") @db.VarChar(5) @map("hora_lembrete")
+  alertasEmail  Boolean     @default(true) @map("alertas_email")
+
+  // Aceite dos termos de uso (LGPD: contrato entre a plataforma e o profissional)
+  termosVersao    String?   @db.VarChar(20) @map("termos_versao")
+  termosAceitosEm DateTime? @map("termos_aceitos_em")
+
   pacientes     Paciente[]
   protocolos    Protocolo[]
 
@@ -46,6 +55,7 @@ model Paciente {
   ativo          Boolean      @default(true) @map("ativo")
   criadoEm       DateTime     @default(now()) @map("criado_em")
   atualizadoEm   DateTime     @updatedAt @map("atualizado_em")
+  anonimizadoEm  DateTime?    @map("anonimizado_em")
   
   profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Restrict)
   tratamentos    Tratamento[]
@@ -131,6 +141,8 @@ model Tratamento {
   versaoProtocolo   VersaoProtocolo  @relation(fields: [versaoProtocoloId], references: [id], onDelete: Restrict)
   checkins          Checkin[]
   sessoes           SessaoPaciente[]
+  consentimentos    ConsentimentoPaciente[]
+  notificacoes      Notificacao[]
 
   @@map("tratamentos")
 }
@@ -146,6 +158,7 @@ model Checkin {
   
   tratamento     Tratamento              @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
   respostas      RespostaTarefaCheckin[]
+  fotos          FotoCheckin[]
 
   @@unique([tratamentoId, diaRecuperacao])
   @@map("checkins")
@@ -176,4 +189,110 @@ model SessaoPaciente {
   tratamento   Tratamento @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
 
   @@map("sessoes_paciente")
+}
+
+// ─── Primeira versão: fotos, consentimento, notificações e LGPD ─────────────
+
+model FotoCheckin {
+  id           String   @id @default(uuid())
+  checkinId    String   @map("checkin_id")
+  arquivo      String   @db.VarChar(255)
+  tamanhoBytes Int      @map("tamanho_bytes")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  checkin      Checkin  @relation(fields: [checkinId], references: [id], onDelete: Restrict)
+
+  @@index([checkinId])
+  @@map("fotos_checkin")
+}
+
+model ConsentimentoPaciente {
+  id              String     @id @default(uuid())
+  tratamentoId    String     @map("tratamento_id")
+  versaoTermo     String     @db.VarChar(20) @map("versao_termo")
+  aceitaLembretes Boolean    @map("aceita_lembretes")
+  ip              String?    @db.VarChar(45)
+  userAgent       String?    @db.VarChar(255) @map("user_agent")
+  aceitoEm        DateTime   @default(now()) @map("aceito_em")
+
+  tratamento      Tratamento @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
+
+  @@index([tratamentoId])
+  @@map("consentimentos_paciente")
+}
+
+enum TipoNotificacao {
+  lembrete_checkin
+  alerta_dor
+}
+
+enum CanalNotificacao {
+  email
+  whatsapp
+}
+
+enum StatusNotificacao {
+  enviada
+  simulada
+  falhou
+}
+
+// Registro de cada mensagem automática. `referencia` é única: impede lembrete ou alerta repetido.
+// O texto da mensagem não é guardado — teria dados de saúde duplicados sem necessidade.
+model Notificacao {
+  id           String            @id @default(uuid())
+  tipo         TipoNotificacao
+  canal        CanalNotificacao
+  status       StatusNotificacao
+  referencia   String            @unique @db.VarChar(120)
+  tratamentoId String?           @map("tratamento_id")
+  erro         String?           @db.Text
+  criadoEm     DateTime          @default(now()) @map("criado_em")
+
+  tratamento   Tratamento?       @relation(fields: [tratamentoId], references: [id], onDelete: Restrict)
+
+  @@index([tratamentoId])
+  @@map("notificacoes")
+}
+
+enum TipoAtor {
+  profissional
+  admin
+  paciente
+  sistema
+}
+
+// Quem acessou ou alterou dados de pacientes (LGPD art. 37: registro das operações de tratamento).
+model RegistroAcesso {
+  id         String   @id @default(uuid())
+  atorTipo   TipoAtor @map("ator_tipo")
+  atorId     String?  @db.VarChar(36) @map("ator_id")
+  acao       String   @db.VarChar(60)
+  entidade   String   @db.VarChar(40)
+  entidadeId String?  @db.VarChar(36) @map("entidade_id")
+  ip         String?  @db.VarChar(45)
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  @@index([entidade, entidadeId])
+  @@index([atorId])
+  @@map("registros_acesso")
+}
+
+enum PerfilUsuario {
+  admin
+  profissional
+}
+
+// Guarda só o hash do token enviado por e-mail: quem lê o banco não consegue redefinir senhas.
+model TokenRedefinicaoSenha {
+  id        String        @id @default(uuid())
+  tokenHash String        @unique @db.Char(64) @map("token_hash")
+  perfil    PerfilUsuario
+  usuarioId String        @db.VarChar(36) @map("usuario_id")
+  expiraEm  DateTime      @map("expira_em")
+  usadoEm   DateTime?     @map("usado_em")
+  criadoEm  DateTime      @default(now()) @map("criado_em")
+
+  @@index([usuarioId])
+  @@map("tokens_redefinicao_senha")
 }

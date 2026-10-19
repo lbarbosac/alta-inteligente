@@ -16,6 +16,19 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  // Erros do upload de fotos (multer)
+  if (err?.name === 'MulterError') {
+    const mensagens = {
+      LIMIT_FILE_SIZE:       'Cada foto pode ter no máximo 10 MB.',
+      LIMIT_FILE_COUNT:      'Envie no máximo 3 fotos por check-in.',
+      LIMIT_UNEXPECTED_FILE: 'Envie no máximo 3 fotos por check-in.',
+    };
+    return res.status(422).json({
+      success: false,
+      message: mensagens[err.code] ?? 'Não foi possível receber as fotos. Tente novamente.',
+    });
+  }
+
   // Erros de validação do Zod v4
   if (err?.name === 'ZodError' || err?.issues) {
     return res.status(422).json({

@@ -1,87 +1,31 @@
 // Arquivo: src/components/StatCard/index.jsx
 
-// ─── Mapa de cores por variante ────────────────────────────────────────────
-const COLOR_MAP = {
-  slate: {
-    container: 'bg-slate-100',
-    icon:      'text-slate-600',
-  },
-  green: {
-    container: 'bg-emerald-50',
-    icon:      'text-emerald-600',
-  },
-  amber: {
-    container: 'bg-amber-50',
-    icon:      'text-amber-600',
-  },
-  red: {
-    container: 'bg-red-50',
-    icon:      'text-red-600',
-  },
-};
-
 /**
- * Card de métrica reutilizável para o dashboard.
+ * Número de destaque. `tone="escuro"` é o bloco interno do painel escuro (um por tela).
+ * `alerta` pinta o número de vermelho quando há algo a olhar — só para status clínico.
  *
- * @param {string}          title       - Rótulo da métrica
- * @param {string|number}   value       - Valor principal (grande)
- * @param {React.Component} icon        - Ícone Lucide
- * @param {'slate'|'green'|'amber'|'red'} color - Variante de cor
- * @param {string}          [description] - Texto auxiliar abaixo do valor
- * @param {boolean}         [loading]   - Exibe skeleton enquanto carrega
+ * Contraste medido (specs/design.md §2): neutral-400 sobre neutral-800 = 6,00:1; red-400 sobre ink = 7,16:1.
  */
-export default function StatCard({
-  title,
-  value,
-  icon: Icon,
-  color = 'slate',
-  description,
-  loading = false,
-}) {
-  const { container, icon } = COLOR_MAP[color] ?? COLOR_MAP.slate;
+export default function StatCard({ title, value, description, tone = 'claro', alerta = false, loading = false }) {
+  const escuro = tone === 'escuro';
 
-  if (loading) {
-    return (
-      <article className="bg-white border border-slate-100 rounded-2xl p-5 shadow-card">
-        <div className="flex items-start justify-between">
-          <div className="space-y-3 flex-1">
-            <div className="h-3 w-24 skeleton" />
-            <div className="h-8 w-16 skeleton" />
-            {description && <div className="h-3 w-32 skeleton" />}
-          </div>
-          <div className="w-10 h-10 skeleton rounded-xl" />
-        </div>
-      </article>
-    );
-  }
+  const caixa = escuro ? 'bg-neutral-800' : 'border border-line bg-white';
+  const corTitulo = escuro ? 'text-neutral-400' : 'text-neutral-600';
+  const corValor = alerta ? (escuro ? 'text-red-400' : 'text-red-600') : (escuro ? 'text-white' : 'text-ink');
+  const corDescricao = escuro ? 'text-neutral-400' : 'text-neutral-500';
 
   return (
-    <article className="bg-white border border-slate-100 rounded-2xl p-5 shadow-card
-      hover:shadow-float transition-shadow duration-200">
-      <div className="flex items-start justify-between gap-4">
-
-        {/* Valores */}
-        <div className="space-y-1 min-w-0">
-          <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-            {title}
-          </p>
-          <p className="text-slate-950 text-3xl font-extrabold leading-none tracking-tight">
-            {value ?? '—'}
-          </p>
-          {description && (
-            <p className="text-slate-400 text-xs font-light leading-snug pt-0.5">
-              {description}
-            </p>
-          )}
+    <div className={`flex flex-col rounded-lg p-4 ${caixa}`}>
+      {/* Título com altura de duas linhas: os números ficam alinhados mesmo quando um título quebra */}
+      <p className={`line-clamp-2 min-h-10 text-sm font-medium leading-5 ${corTitulo}`}>{title}</p>
+      {loading ? (
+        <div className={`mt-3 h-9 w-14 animate-pulse rounded-md ${escuro ? 'bg-neutral-700' : 'bg-neutral-200'}`} />
+      ) : (
+        <div className="mt-3">
+          <p className={`text-3xl font-semibold leading-none tracking-tight tabular-nums sm:text-4xl ${corValor}`}>{value ?? '—'}</p>
+          <p className={`mt-2 min-h-4 text-xs leading-4 ${corDescricao}`}>{description}</p>
         </div>
-
-        {/* Ícone */}
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center
-          flex-shrink-0 ${container}`}>
-          <Icon size={18} strokeWidth={1.5} className={icon} />
-        </div>
-
-      </div>
-    </article>
+      )}
+    </div>
   );
 }

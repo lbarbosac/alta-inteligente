@@ -78,4 +78,17 @@ function validateUpdate(req, res, next) {
   next();
 }
 
-module.exports = { validateCreate, validateUpdate };
+/**
+ * Anonimizar é irreversível: o corpo precisa trazer { confirmar: true } explicitamente.
+ */
+const anonimizarSchema = z.object({
+  confirmar: z.literal(true, { message: 'Confirme a anonimização.' }),
+});
+
+function validateAnonimizar(req, res, next) {
+  const resultado = anonimizarSchema.safeParse(req.body);
+  if (!resultado.success) return next(resultado.error);
+  next();
+}
+
+module.exports = { validateCreate, validateUpdate, validateAnonimizar };
