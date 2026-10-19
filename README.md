@@ -4,6 +4,8 @@ Acompanhamento de pós-operatório. O profissional de saúde cadastra o paciente
 recuperação e acompanha os check-ins diários. O paciente responde por um link único, no celular, sem
 login e sem instalar nada.
 
+**No ar:** https://alta-inteligente.vercel.app
+
 ## Como funciona
 
 1. O profissional cria um **protocolo**: quantos dias dura a recuperação e o que o paciente faz em cada dia.
@@ -168,14 +170,28 @@ Base: `/api/v1`. Tudo em JSON, com envelope `{ success, message, data }`.
   regrava cada imagem para remover metadados e localização.
 - Os dados do paciente só são acessíveis ao profissional dono do cadastro, e cada acesso fica registrado.
 
-## Antes de colocar no ar
+## Publicação
+
+O site roda na Vercel, num projeto só, a partir da raiz do repositório (`vercel.json`):
+
+- O frontend é gerado em `frontend/dist` e o backend Express roda como função (`api/index.js`, que usa o
+  mesmo `backend/src/app.js` do `npm run dev`). Frontend e API ficam no mesmo endereço, em `/api/v1`.
+- O banco é MySQL hospedado (Aiven). O build roda `prisma migrate deploy` e o seed a cada publicação.
+- As fotos vão para um Vercel Blob **privado** (`BLOB_READ_WRITE_TOKEN`); sem essa variável, ficam em disco.
+- O lembrete diário é disparado pela Vercel uma vez por dia em `/api/v1/cron/lembretes`, protegido por
+  `CRON_SECRET`.
+- Variáveis em produção: `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `FRONTEND_URL`, `TRUST_PROXY=1` e
+  `BLOB_READ_WRITE_TOKEN`.
+
+Para publicar uma nova versão: `npx vercel deploy --prod`.
+
+## Antes de colocar no ar de verdade
 
 - Preencher `VITE_EMPRESA_*` e revisar a política de privacidade e os termos de uso com apoio jurídico.
 - Configurar `SMTP_*` para o envio de e-mail.
 - Criar a conta na Meta e aprovar o modelo de mensagem do WhatsApp, com três variáveis no corpo:
   `{{1}}` primeiro nome, `{{2}}` dia da recuperação e `{{3}}` link do check-in.
-- Servir por HTTPS, manter o servidor sempre ligado (o lembrete diário roda dentro dele) e fazer backup
-  do banco junto com a pasta das fotos.
+- Fazer backup do banco junto com as fotos.
 
 ## Licença
 

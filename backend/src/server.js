@@ -1,47 +1,8 @@
-const express = require('express');
-const cors    = require('cors');
-const helmet  = require('helmet');
-
-const { env }               = require('./shared/config/env');
-const { router }            = require('./routes/index');
-const { errorHandler }      = require('./shared/middlewares/errorHandler');
-const { requestLogger }     = require('./shared/middlewares/requestLogger');
-const { globalRateLimiter } = require('./shared/middlewares/rateLimiter');
+// Servidor para rodar no computador (npm run dev). A configuração do Express fica no app.js.
+const app = require('./app');
+const { env } = require('./shared/config/env');
 const { connectDatabase, disconnectDatabase } = require('./shared/database/connection');
 const { iniciarLembretes } = require('./modules/notifications/notification.scheduler');
-
-const app = express();
-
-// Atrás de proxy reverso o IP real vem no X-Forwarded-For (limites por IP e registro de acesso dependem disso)
-if (env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY);
-
-// ─── Segurança ─────────────────────────────────────────────────────────────
-app.use(helmet());
-app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
-app.use(globalRateLimiter);
-
-// ─── Parsing ───────────────────────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ─── Log de requisições (apenas em dev) ───────────────────────────────────
-app.use(requestLogger);
-
-// ─── Rotas ─────────────────────────────────────────────────────────────────
-app.use('/api/v1', router);
-
-// ─── Health check ──────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
-  res.json({
-    status:    'ok',
-    project:   'AltaInteligente',
-    version:   '1.0.0',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// ─── Tratamento de erros (sempre por último) ───────────────────────────────
-app.use(errorHandler);
 
 // ─── Inicialização ─────────────────────────────────────────────────────────
 async function bootstrap() {

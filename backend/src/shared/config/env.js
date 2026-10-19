@@ -33,6 +33,8 @@ const env = {
   WHATSAPP_TEMPLATE_LEMBRETE: process.env.WHATSAPP_TEMPLATE_LEMBRETE || 'lembrete_checkin',
   WHATSAPP_TEMPLATE_IDIOMA: process.env.WHATSAPP_TEMPLATE_IDIOMA || 'pt_BR',
   LEMBRETES_ATIVOS: process.env.LEMBRETES_ATIVOS !== 'false',
+  // Site publicado: a Vercel chama /api/v1/cron/lembretes com este segredo (ver vercel.json)
+  CRON_SECRET: process.env.CRON_SECRET,
 };
 
 // Valida variáveis obrigatórias na inicialização

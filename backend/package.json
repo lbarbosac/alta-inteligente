@@ -11,13 +11,15 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
-    "test": "node --test"
+    "test": "node --test",
+    "vercel-build": "prisma generate && prisma migrate deploy && node prisma/seed.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^2.8.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

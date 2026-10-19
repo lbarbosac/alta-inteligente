@@ -3,7 +3,8 @@ import api from '../services/api';
 
 /** A API devolve o caminho da foto (/api/v1/fotos/...): aqui vira endereço completo do servidor. */
 export function urlDaApi(caminho) {
-  return new URL(caminho, api.defaults.baseURL).toString();
+  // baseURL pode ser relativa ("/api/v1" no site publicado): resolve a partir do endereço aberto
+  return new URL(caminho, new URL(api.defaults.baseURL, window.location.origin)).toString();
 }
 
 /** Link do portal do paciente, no endereço em que o sistema está aberto. */

@@ -1,0 +1,9 @@
+# Só o código vai para a Vercel: nada de dependências locais, senhas ou documentos internos
+**/node_modules
+**/.env
+**/.env.local
+backend/storage
+frontend/dist
+CLAUDE.md
+specs
+docs
